@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --verde-pinula: #1a6b3c;
+  --verde-claro: #22913f;
+  --verde-hover: #145a32;
+  --gris-fondo: #f0f4f2;
+  --gris-borde: #d1ddd6;
+  --texto-principal: #0f2419;
+  --texto-secundario: #4a6b55;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--gris-fondo);
+  color: var(--texto-principal);
+}
+
+.btn-primary {
+  background-color: var(--verde-pinula);
+  color: white;
+  font-weight: 600;
+  padding: 0.625rem 1.5rem;
+  border-radius: 0.5rem;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  width: 100%;
+}
+
+.btn-primary:hover {
+  background-color: var(--verde-hover);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.input-field {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 1.5px solid var(--gris-borde);
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  background: white;
+  color: var(--texto-principal);
+  transition: border-color 0.15s ease;
+  outline: none;
+}
+
+.input-field:focus {
+  border-color: var(--verde-pinula);
+  box-shadow: 0 0 0 3px rgba(26, 107, 60, 0.12);
+}
+
+.card {
+  background: white;
+  border-radius: 0.75rem;
+  border: 1px solid var(--gris-borde);
+  padding: 1.5rem;
+}
