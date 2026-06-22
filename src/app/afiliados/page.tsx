@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, type Afiliado, type Perfil } from '@/lib/supabase'
+import { supabase, type AfiliadoConRelaciones, type Perfil } from '@/lib/supabase'
 import NavBar from '@/components/NavBar'
 
 const colorRol: Record<string, { bg: string; color: string }> = {
@@ -16,7 +16,7 @@ const colorRol: Record<string, { bg: string; color: string }> = {
 export default function AfiliadosPage() {
   const router = useRouter()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
-  const [afiliados, setAfiliados] = useState<Afiliado[]>([])
+  const [afiliados, setAfiliados] = useState<AfiliadoConRelaciones[]>([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [total, setTotal] = useState(0)
@@ -46,7 +46,7 @@ export default function AfiliadosPage() {
         q = q.or(`primer_apellido.ilike.%${termino}%,primer_nombre.ilike.%${termino}%,dpi.eq.${termino}`)
       }
       const { data, count } = await q
-      setAfiliados(data || [])
+      setAfiliados((data as AfiliadoConRelaciones[]) || [])
       setTotal(count || 0)
     } finally {
       setLoading(false)
@@ -57,7 +57,7 @@ export default function AfiliadosPage() {
     if (perfil) cargarAfiliados(perfil.rol, perfil.id, busqueda)
   }
 
-  const formatNombre = (a: Afiliado) =>
+  const formatNombre = (a: AfiliadoConRelaciones) =>
     [a.primer_apellido, a.segundo_apellido, a.primer_nombre, a.segundo_nombre]
       .filter(Boolean).join(' ')
 
@@ -80,8 +80,6 @@ export default function AfiliadosPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-
-
             <button onClick={() => router.push('/afiliados/nuevo')} className="text-sm px-4 py-1.5 rounded-lg font-semibold text-white" style={{ background: '#004466' }}>
               + Nuevo
             </button>
@@ -127,9 +125,9 @@ export default function AfiliadosPage() {
         ) : (
           <div className="space-y-3">
             {afiliados.map((a) => {
-              const rol = (a as any).rol_afiliado || 'Simpatizante'
+              const rol = a.rol_afiliado || 'Simpatizante'
               const estiloRol = colorRol[rol] || colorRol['Simpatizante']
-              const encargadoSector = (a.sectores as any)?.encargado_nombre
+              const encargadoSector = a.sectores?.encargado_nombre
               return (
                 <div key={a.id} className="card hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between gap-4">
@@ -174,10 +172,10 @@ export default function AfiliadosPage() {
                             <span>{encargadoSector}</span>
                           </div>
                         )}
-                        {(a as any).afiliado_por && (
+                        {a.afiliado_por && (
                           <div>
                             <span className="font-medium" style={{ color: 'var(--texto-secundario)' }}>Afiliado por: </span>
-                            <span>{(a as any).afiliado_por}</span>
+                            <span>{a.afiliado_por}</span>
                           </div>
                         )}
                       </div>
