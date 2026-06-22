@@ -141,7 +141,7 @@ export default function AfiliadosPage() {
                           {rol}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm ml-10">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm ml-10">
                         {a.dpi && (
                           <div>
                             <span className="font-medium" style={{ color: 'var(--texto-secundario)' }}>DPI: </span>
