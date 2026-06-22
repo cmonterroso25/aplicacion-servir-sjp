@@ -18,34 +18,11 @@ export type Empadronado = {
   municipio: string
   direccion: string
 }
+
 export type Perfil = {
   id: string
   email: string
   nombre_completo: string | null
-  rol: string
-  created_at: string
-}
-
-export type Sector = {
-  id: number
-  nombre: string
-  descripcion: string | null
-  encargado_nombre: string | null
-}
-
-export type Afiliado = {
-  id: number
-  dpi: string
-  primer_nombre: string
-  segundo_nombre: string | null
-  primer_apellido: string
-  segundo_apellido: string | null
-  genero: string
-  edad: number
-  departamento: string
-  municipio: string
-  direccion: string
-  sector_id: number | null
   rol: string
   created_at: string
 }
@@ -76,4 +53,9 @@ export type Afiliado = {
   edad: string | null
   afiliado_por: string | null
   rol_afiliado: string | null
+}
+
+export type AfiliadoConRelaciones = Afiliado & {
+  sectores: { nombre: string; encargado_nombre: string | null } | null
+  perfiles: { nombre_completo: string | null; email: string } | null
 }
