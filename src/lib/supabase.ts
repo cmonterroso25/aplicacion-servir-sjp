@@ -18,3 +18,10 @@ export type Empadronado = {
   municipio: string
   direccion: string
 }
+export type Perfil = {
+  id: string
+  email: string
+  nombre_completo: string | null
+  rol: string
+  created_at: string
+}
