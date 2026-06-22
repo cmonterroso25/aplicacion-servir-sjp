@@ -30,12 +30,15 @@ export default function CalendarioPage() {
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState<ReunionForm>(FORM_VACIO)
+  const [editandoId, setEditandoId] = useState<number | null>(null)  // ← NUEVO
   const [guardando, setGuardando] = useState(false)
+  const [eliminando, setEliminando] = useState<number | null>(null)  // ← NUEVO
   const [error, setError] = useState('')
   const [mesActual, setMesActual] = useState(new Date())
   const [diaSeleccionado, setDiaSeleccionado] = useState<string | null>(null)
 
-  const puedeAgendar = perfil?.rol === 'admin' || perfil?.rol === 'encargado'
+  // ✅ CORREGIDO: colaborador en lugar de encargado
+  const puedeAgendar = perfil?.rol === 'admin' || perfil?.rol === 'colaborador'
 
   useEffect(() => {
     const init = async () => {
@@ -80,6 +83,23 @@ export default function CalendarioPage() {
 
   const abrirModal = (fechaInicial = '') => {
     setForm({ ...FORM_VACIO, fecha: fechaInicial })
+    setEditandoId(null)  // ← NUEVO
+    setError('')
+    setModal(true)
+  }
+
+  // ← NUEVA FUNCIÓN
+  const abrirModalEditar = (r: Reunion) => {
+    setForm({
+      titulo: r.titulo || '',
+      encargado_nombre: (r as any).encargado_nombre || '',
+      lugar: r.lugar || '',
+      fecha: r.fecha || '',
+      hora_inicio: r.hora_inicio || '',
+      hora_fin: r.hora_fin || '',
+      descripcion: r.descripcion || '',
+    })
+    setEditandoId(r.id)
     setError('')
     setModal(true)
   }
@@ -92,25 +112,65 @@ export default function CalendarioPage() {
     setGuardando(true)
     setError('')
     try {
-      const { error: e } = await supabase.from('reuniones').insert({
-        titulo: form.titulo,
-        encargado_nombre: form.encargado_nombre || null,
-        lugar: form.lugar || null,
-        fecha: form.fecha,
-        hora_inicio: form.hora_inicio,
-        hora_fin: form.hora_fin || null,
-        descripcion: form.descripcion || null,
-        tipo: 'general',
-        creado_por: perfil!.id,
-      })
-      if (e) throw e
+      if (editandoId) {
+        // ← EDITAR
+        const { error: e } = await supabase
+          .from('reuniones')
+          .update({
+            titulo: form.titulo,
+            encargado_nombre: form.encargado_nombre || null,
+            lugar: form.lugar || null,
+            fecha: form.fecha,
+            hora_inicio: form.hora_inicio,
+            hora_fin: form.hora_fin || null,
+            descripcion: form.descripcion || null,
+          })
+          .eq('id', editandoId)
+        if (e) throw e
+      } else {
+        // INSERTAR
+        const { error: e } = await supabase.from('reuniones').insert({
+          titulo: form.titulo,
+          encargado_nombre: form.encargado_nombre || null,
+          lugar: form.lugar || null,
+          fecha: form.fecha,
+          hora_inicio: form.hora_inicio,
+          hora_fin: form.hora_fin || null,
+          descripcion: form.descripcion || null,
+          tipo: 'general',
+          creado_por: perfil!.id,
+        })
+        if (e) throw e
+      }
       setModal(false)
       setForm(FORM_VACIO)
+      setEditandoId(null)
       await cargarReuniones()
     } catch {
       setError('Error al guardar. Intenta de nuevo.')
     } finally {
       setGuardando(false)
+    }
+  }
+
+  // ← NUEVA FUNCIÓN
+  const eliminarReunion = async (id: number) => {
+    if (!confirm('¿Eliminar esta reunión? Esta acción no se puede deshacer.')) return
+    setEliminando(id)
+    try {
+      const { error: e } = await supabase
+        .from('reuniones')
+        .delete()
+        .eq('id', id)
+      if (e) throw e
+      await cargarReuniones()
+      // Si se elimina la última reunión del día seleccionado, limpiar selección
+      const quedanReuniones = reuniones.filter(r => r.id !== id && r.fecha === diaSeleccionado)
+      if (quedanReuniones.length === 0) setDiaSeleccionado(null)
+    } catch {
+      alert('Error al eliminar. Intenta de nuevo.')
+    } finally {
+      setEliminando(null)
     }
   }
 
@@ -222,7 +282,15 @@ export default function CalendarioPage() {
             ) : (
               <div className="space-y-2">
                 {reunionesDiaSeleccionado.map(r => (
-                  <ReunionCard key={r.id} r={r} formatHora={formatHora} />
+                  <ReunionCard
+                    key={r.id}
+                    r={r}
+                    formatHora={formatHora}
+                    puedeEditar={puedeAgendar}
+                    onEditar={() => abrirModalEditar(r)}
+                    onEliminar={() => eliminarReunion(r.id)}
+                    eliminando={eliminando === r.id}
+                  />
                 ))}
               </div>
             )}
@@ -246,7 +314,17 @@ export default function CalendarioPage() {
           ) : (
             <div className="space-y-2">
               {proximasReuniones.map(r => (
-                <ReunionCard key={r.id} r={r} formatHora={formatHora} showFecha formatFecha={formatFecha} />
+                <ReunionCard
+                  key={r.id}
+                  r={r}
+                  formatHora={formatHora}
+                  showFecha
+                  formatFecha={formatFecha}
+                  puedeEditar={puedeAgendar}
+                  onEditar={() => abrirModalEditar(r)}
+                  onEliminar={() => eliminarReunion(r.id)}
+                  eliminando={eliminando === r.id}
+                />
               ))}
             </div>
           )}
@@ -254,7 +332,7 @@ export default function CalendarioPage() {
 
       </main>
 
-      {/* Modal agendar */}
+      {/* Modal agendar / editar */}
       {modal && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-0"
@@ -262,7 +340,10 @@ export default function CalendarioPage() {
           onClick={(e) => { if (e.target === e.currentTarget) setModal(false) }}>
           <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl">
             <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--color-borde)' }}>
-              <h3 className="font-semibold text-base" style={{ color: 'var(--texto-principal)' }}>Nueva reunión</h3>
+              {/* ← Título dinámico según si edita o crea */}
+              <h3 className="font-semibold text-base" style={{ color: 'var(--texto-principal)' }}>
+                {editandoId ? 'Editar reunión' : 'Nueva reunión'}
+              </h3>
               <button onClick={() => setModal(false)} className="text-gray-400 hover:text-gray-600">
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -309,7 +390,7 @@ export default function CalendarioPage() {
                   Cancelar
                 </button>
                 <button onClick={guardarReunion} disabled={guardando} className="flex-1 py-2.5 rounded-lg text-sm font-semibold disabled:opacity-60" style={{ background: '#004466', color: 'white' }}>
-                  {guardando ? 'Guardando...' : 'Guardar reunión'}
+                  {guardando ? 'Guardando...' : editandoId ? 'Guardar cambios' : 'Guardar reunión'}
                 </button>
               </div>
             </div>
@@ -320,27 +401,73 @@ export default function CalendarioPage() {
   )
 }
 
-function ReunionCard({ r, formatHora, showFecha, formatFecha }: {
+// ← COMPONENTE ACTUALIZADO CON BOTONES
+function ReunionCard({
+  r,
+  formatHora,
+  showFecha,
+  formatFecha,
+  puedeEditar,
+  onEditar,
+  onEliminar,
+  eliminando
+}: {
   r: Reunion
   formatHora: (h: string) => string
   showFecha?: boolean
   formatFecha?: (f: string) => string
+  puedeEditar?: boolean
+  onEditar?: () => void
+  onEliminar?: () => void
+  eliminando?: boolean
 }) {
   return (
     <div className="card">
-      <div className="flex-1 min-w-0">
-        {showFecha && formatFecha && (
-          <p className="text-xs mb-1 font-medium" style={{ color: 'var(--texto-secundario)' }}>{formatFecha(r.fecha)}</p>
-        )}
-        <p className="font-semibold text-sm" style={{ color: 'var(--texto-principal)' }}>{r.titulo}</p>
-        {r.descripcion && (
-          <p className="text-xs mt-0.5" style={{ color: 'var(--texto-secundario)' }}>{r.descripcion}</p>
-        )}
-        <div className="flex flex-col gap-1 mt-2 text-xs" style={{ color: 'var(--texto-secundario)' }}>
-          <span>🕐 {formatHora(r.hora_inicio)}{r.hora_fin ? ` – ${formatHora(r.hora_fin)}` : ''}</span>
-          {r.lugar && <span>📍 {r.lugar}</span>}
-          {(r as any).encargado_nombre && <span>👤 {(r as any).encargado_nombre}</span>}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          {showFecha && formatFecha && (
+            <p className="text-xs mb-1 font-medium" style={{ color: 'var(--texto-secundario)' }}>{formatFecha(r.fecha)}</p>
+          )}
+          <p className="font-semibold text-sm" style={{ color: 'var(--texto-principal)' }}>{r.titulo}</p>
+          {r.descripcion && (
+            <p className="text-xs mt-0.5" style={{ color: 'var(--texto-secundario)' }}>{r.descripcion}</p>
+          )}
+          <div className="flex flex-col gap-1 mt-2 text-xs" style={{ color: 'var(--texto-secundario)' }}>
+            <span>🕐 {formatHora(r.hora_inicio)}{r.hora_fin ? ` – ${formatHora(r.hora_fin)}` : ''}</span>
+            {r.lugar && <span>📍 {r.lugar}</span>}
+            {(r as any).encargado_nombre && <span>👤 {(r as any).encargado_nombre}</span>}
+          </div>
         </div>
+
+        {/* ← BOTONES EDITAR / ELIMINAR */}
+        {puedeEditar && (
+          <div className="flex gap-1 shrink-0">
+            <button
+              onClick={onEditar}
+              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              title="Editar reunión">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: '#004466' }}>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+            <button
+              onClick={onEliminar}
+              disabled={eliminando}
+              className="p-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+              title="Eliminar reunión">
+              {eliminando ? (
+                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" style={{ color: '#dc2626' }}>
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: '#dc2626' }}>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
