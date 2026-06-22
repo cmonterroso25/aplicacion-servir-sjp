@@ -143,6 +143,39 @@ export default function EstadisticasPage() {
             <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>No hay datos todavia</p>
           </div>
         ) : (
+          <>
+          {/* Grafica resumen: afiliados por sector */}
+          <div className="card space-y-4">
+            <h2 className="font-semibold text-sm" style={{ color: 'var(--texto-principal)' }}>
+              Afiliados por sector
+            </h2>
+            <div className="space-y-2.5">
+              {estadisticas.map((e) => {
+                const max = estadisticas[0].total || 1
+                const ancho = Math.max((e.total / max) * 100, 6)
+                return (
+                  <div key={e.sector} className="flex items-center gap-3">
+                    <p
+                      className="text-xs font-medium w-20 sm:w-28 flex-shrink-0 truncate text-right"
+                      style={{ color: 'var(--texto-secundario)' }}
+                      title={e.sector}
+                    >
+                      {e.sector}
+                    </p>
+                    <div className="flex-1 h-5 rounded-md overflow-hidden" style={{ background: 'var(--color-fondo)' }}>
+                      <div
+                        className="h-full rounded-md flex items-center justify-end px-2 transition-all"
+                        style={{ width: `${ancho}%`, background: '#004466', minWidth: '1.75rem' }}
+                      >
+                        <span className="text-xs font-semibold text-white">{e.total}</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
           <div className="space-y-3">
             <h2 className="font-semibold text-sm" style={{ color: 'var(--texto-principal)' }}>
               Por sector
@@ -194,6 +227,7 @@ export default function EstadisticasPage() {
               </div>
             ))}
           </div>
+          </>
         )}
       </main>
     </div>
