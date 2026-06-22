@@ -128,7 +128,7 @@ export default function TemplariosPage() {
             </div>
             <div className="rounded-xl p-3 text-center" style={{ background: '#fef3c7' }}>
               <p className="text-2xl font-bold" style={{ color: '#b45309' }}>{stats.length}</p>
-              <p className="text-xs mt-0.5" style={{ color: '#b45309' }}>Encargados activos</p>
+              <p className="text-xs mt-0.5" style={{ color: '#b45309' }}>Templarios activos</p>
             </div>
           </div>
         </div>
@@ -160,12 +160,7 @@ export default function TemplariosPage() {
                         <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 text-sm" style={{ background: '#004466' }}>
                           {enc.encargado_nombre.charAt(0).toUpperCase()}
                         </div>
-                        <div className="min-w-0">
-                          <p className="font-semibold text-sm leading-snug" style={{ color: 'var(--texto-principal)' }}>{enc.encargado_nombre}</p>
-                          <p className="text-xs mt-0.5" style={{ color: 'var(--texto-secundario)' }}>
-                            {enc.sectores.map(s => s.nombre).join(', ')}
-                          </p>
-                        </div>
+
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <div className="text-right">
