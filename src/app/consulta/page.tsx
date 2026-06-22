@@ -28,12 +28,12 @@ export default function ConsultaPage() {
       }
       setUserEmail(session.user.email || '')
       const { data: p } = await supabase
-  .from('perfiles')
-  .select('*')
-  .eq('id', session.user.id)
-  .single()
+        .from('perfiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single()
 
-if (p) setPerfil(p)
+      if (p) setPerfil(p)
     }
     checkAuth()
   }, [router])
@@ -190,15 +190,19 @@ if (p) setPerfil(p)
                 <div key={persona.id} className="card hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
+
+                      {/* Encabezado: avatar + nombre completo sin truncar */}
+                      <div className="flex items-center gap-2 mb-3">
                         <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: '#004466' }}>
                           {persona.primer_nombre.charAt(0)}
                         </div>
-                        <h3 className="font-semibold text-base truncate" style={{ color: 'var(--texto-principal)' }}>
+                        <h3 className="font-semibold text-base leading-snug" style={{ color: 'var(--texto-principal)' }}>
                           {formatNombre(persona)}
                         </h3>
                       </div>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm ml-10">
+
+                      {/* Datos en grid, sin ml-10 para evitar superposición */}
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
                         <div>
                           <span className="font-medium" style={{ color: 'var(--texto-secundario)' }}>DPI: </span>
                           <span className="font-mono">{persona.dpi}</span>
@@ -216,6 +220,7 @@ if (p) setPerfil(p)
                           <span>{persona.direccion}</span>
                         </div>
                       </div>
+
                     </div>
                     <div className="flex-shrink-0">
                       <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-full" style={{ background: '#e0f7fa', color: '#004466' }}>
