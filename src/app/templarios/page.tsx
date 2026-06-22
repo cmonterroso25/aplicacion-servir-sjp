@@ -160,7 +160,10 @@ export default function TemplariosPage() {
                         <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 text-sm" style={{ background: '#004466' }}>
                           {enc.encargado_nombre.charAt(0).toUpperCase()}
                         </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm leading-snug" style={{ color: 'var(--texto-principal)' }}>{enc.encargado_nombre}</p>
 
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <div className="text-right">
