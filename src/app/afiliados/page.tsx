@@ -3,6 +3,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, type Afiliado, type Perfil } from '@/lib/supabase'
+import NavBar from '@/components/NavBar'
+
+const colorRol: Record<string, { bg: string; color: string }> = {
+  Simpatizante: { bg: '#e0f7fa', color: '#004466' },
+  Organizador:  { bg: '#fff3e0', color: '#b45309' },
+  Guerrero:     { bg: '#fce4ec', color: '#9b1c3a' },
+  Lider:        { bg: '#e8f5e9', color: '#166534' },
+  Templario:    { bg: '#ede7f6', color: '#4527a0' },
+}
 
 export default function AfiliadosPage() {
   const router = useRouter()
@@ -29,7 +38,7 @@ export default function AfiliadosPage() {
     try {
       let q = supabase
         .from('afiliados')
-        .select('*, sectores(nombre), perfiles(nombre_completo, email)', { count: 'exact' })
+        .select('*, sectores(nombre, encargado_nombre), perfiles(nombre_completo, email)', { count: 'exact' })
         .order('primer_apellido')
         .limit(100)
       if (rol === 'encargado') q = q.eq('encargado_id', userId)
@@ -54,6 +63,7 @@ export default function AfiliadosPage() {
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-fondo)' }}>
+      <NavBar rol={perfil?.rol || ''} />
       <header className="bg-white border-b shadow-sm sticky top-0 z-10" style={{ borderColor: 'var(--color-borde)' }}>
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -70,14 +80,8 @@ export default function AfiliadosPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {perfil?.rol === 'admin' && (
-              <button onClick={() => router.push('/admin')} className="text-sm px-3 py-1.5 rounded-lg border font-medium" style={{ borderColor: '#004466', color: '#004466' }}>
-                Admin
-              </button>
-            )}
-            <button onClick={() => router.push('/consulta')} className="text-sm px-3 py-1.5 rounded-lg border font-medium" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
-              Empadronados
-            </button>
+
+
             <button onClick={() => router.push('/afiliados/nuevo')} className="text-sm px-4 py-1.5 rounded-lg font-semibold text-white" style={{ background: '#004466' }}>
               + Nuevo
             </button>
@@ -122,31 +126,71 @@ export default function AfiliadosPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {afiliados.map((a) => (
-              <div key={a.id} className="card hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: '#004466' }}>
-                        {a.primer_apellido.charAt(0)}
+            {afiliados.map((a) => {
+              const rol = (a as any).rol_afiliado || 'Simpatizante'
+              const estiloRol = colorRol[rol] || colorRol['Simpatizante']
+              const encargadoSector = (a.sectores as any)?.encargado_nombre
+              return (
+                <div key={a.id} className="card hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: '#004466' }}>
+                          {a.primer_apellido.charAt(0)}
+                        </div>
+                        <h3 className="font-semibold text-base" style={{ color: 'var(--texto-principal)' }}>{formatNombre(a)}</h3>
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: estiloRol.bg, color: estiloRol.color }}>
+                          {rol}
+                        </span>
                       </div>
-                      <h3 className="font-semibold text-base" style={{ color: 'var(--texto-principal)' }}>{formatNombre(a)}</h3>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm ml-10">
+                        {a.dpi && (
+                          <div>
+                            <span className="font-medium" style={{ color: 'var(--texto-secundario)' }}>DPI: </span>
+                            <span className="font-mono">{a.dpi}</span>
+                          </div>
+                        )}
+                        {a.telefono && (
+                          <div>
+                            <span className="font-medium" style={{ color: 'var(--texto-secundario)' }}>Tel: </span>
+                            <span>{a.telefono}</span>
+                          </div>
+                        )}
+                        {a.sectores && (
+                          <div>
+                            <span className="font-medium" style={{ color: 'var(--texto-secundario)' }}>Sector: </span>
+                            <span>{a.sectores.nombre}</span>
+                          </div>
+                        )}
+                        {a.tipo_ubicacion && a.nombre_ubicacion && (
+                          <div>
+                            <span className="font-medium" style={{ color: 'var(--texto-secundario)' }}>Ubicacion: </span>
+                            <span>{a.nombre_ubicacion}</span>
+                          </div>
+                        )}
+                        {perfil?.rol !== 'encargado' && encargadoSector && (
+                          <div>
+                            <span className="font-medium" style={{ color: 'var(--texto-secundario)' }}>Encargado del sector: </span>
+                            <span>{encargadoSector}</span>
+                          </div>
+                        )}
+                        {(a as any).afiliado_por && (
+                          <div>
+                            <span className="font-medium" style={{ color: 'var(--texto-secundario)' }}>Afiliado por: </span>
+                            <span>{(a as any).afiliado_por}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm ml-10">
-                      {a.dpi && <div><span className="font-medium" style={{ color: 'var(--texto-secundario)' }}>DPI: </span><span className="font-mono">{a.dpi}</span></div>}
-                      {a.telefono && <div><span className="font-medium" style={{ color: 'var(--texto-secundario)' }}>Tel: </span><span>{a.telefono}</span></div>}
-                      {a.sectores && <div><span className="font-medium" style={{ color: 'var(--texto-secundario)' }}>Sector: </span><span>{a.sectores.nombre}</span></div>}
-                      {a.tipo_ubicacion && a.nombre_ubicacion && <div><span className="font-medium" style={{ color: 'var(--texto-secundario)' }}>Ubicacion: </span><span>{a.nombre_ubicacion}</span></div>}
-                      {perfil?.rol !== 'encargado' && a.perfiles && <div className="col-span-2"><span className="font-medium" style={{ color: 'var(--texto-secundario)' }}>Encargado: </span><span>{a.perfiles.nombre_completo || a.perfiles.email}</span></div>}
-                    </div>
+                    <span
+                      className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-full flex-shrink-0"
+                      style={{ background: a.vota_en_pinula ? '#dcfce7' : '#fee2e2', color: a.vota_en_pinula ? '#166534' : '#991b1b' }}>
+                      {a.vota_en_pinula ? 'Vota en Pinula' : 'No vota aqui'}
+                    </span>
                   </div>
-                  <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-full flex-shrink-0"
-                    style={{ background: a.vota_en_pinula ? '#dcfce7' : '#fee2e2', color: a.vota_en_pinula ? '#166534' : '#991b1b' }}>
-                    {a.vota_en_pinula ? 'Vota en Pinula' : 'No vota aqui'}
-                  </span>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </main>
