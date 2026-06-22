@@ -49,3 +49,31 @@ export type Afiliado = {
   rol: string
   created_at: string
 }
+
+export type Sector = {
+  id: number
+  nombre: string
+  descripcion: string | null
+  encargado_nombre: string | null
+}
+
+export type Afiliado = {
+  id: number
+  primer_apellido: string
+  segundo_apellido: string | null
+  primer_nombre: string
+  segundo_nombre: string | null
+  dpi: string | null
+  telefono: string | null
+  fecha_nacimiento: string | null
+  sector_id: number | null
+  encargado_id: string | null
+  tipo_ubicacion: string | null
+  nombre_ubicacion: string | null
+  vota_en_pinula: boolean | null
+  created_at: string | null
+  genero: string | null
+  edad: string | null
+  afiliado_por: string | null
+  rol_afiliado: string | null
+}
