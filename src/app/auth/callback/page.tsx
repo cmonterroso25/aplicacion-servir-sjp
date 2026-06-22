@@ -9,11 +9,10 @@ export default function AuthCallback() {
   const [debug, setDebug] = useState('')
 
   useEffect(() => {
-    // Capturar todo lo que llega en la URL
     const hash = window.location.hash
     const search = window.location.search
     const href = window.location.href
-    
+
     setDebug(`HREF: ${href}\nHASH: ${hash}\nSEARCH: ${search}`)
     console.log('=== AUTH CALLBACK DEBUG ===')
     console.log('href:', href)
@@ -25,7 +24,7 @@ export default function AuthCallback() {
         console.log('EVENT:', event)
         console.log('SESSION:', session ? 'existe' : 'null')
         setDebug(prev => prev + `\n\nEVENT: ${event}\nSESSION: ${session ? 'existe' : 'null'}`)
-        
+
         if (event === 'PASSWORD_RECOVERY' && session) {
           router.replace('/auth/actualizar-contrasena')
         } else if (event === 'SIGNED_IN' && session) {
@@ -38,5 +37,15 @@ export default function AuthCallback() {
   }, [router])
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="text-center">
+        <p className="text-gray-600">Procesando autenticación...</p>
+        {debug && (
+          <pre className="mt-4 text-left text-xs bg-gray-100 p-4 rounded max-w-lg overflow-auto">
+            {debug}
+          </pre>
+        )}
+      </div>
+    </div>
+  )
+}
