@@ -13,11 +13,16 @@ type RolCount = {
   otro: number
 }
 
+type SectorCount = {
+  nombre: string
+  total: number
+}
+
 type EncargadoStats = {
   encargado_id: string
   encargado_nombre: string
   total: number
-  sectores: string[]
+  sectores: SectorCount[]
   roles: RolCount
 }
 
@@ -59,7 +64,7 @@ export default function TemplariosPage() {
       for (const row of data || []) {
         const eid = row.encargado_id as string
         const nombre = (row.perfiles as any)?.nombre_completo || (row.perfiles as any)?.email || 'Sin nombre'
-        const sector = (row.sectores as any)?.nombre || 'Sin sector'
+        const sectorNombre = (row.sectores as any)?.nombre || 'Sin sector'
         const rol = (row.rol_afiliado || '').toLowerCase()
 
         if (!mapa[eid]) {
@@ -73,7 +78,14 @@ export default function TemplariosPage() {
         }
 
         mapa[eid].total++
-        if (!mapa[eid].sectores.includes(sector)) mapa[eid].sectores.push(sector)
+
+        // Contar por sector
+        const sectorExistente = mapa[eid].sectores.find(s => s.nombre === sectorNombre)
+        if (sectorExistente) {
+          sectorExistente.total++
+        } else {
+          mapa[eid].sectores.push({ nombre: sectorNombre, total: 1 })
+        }
 
         if (rol.includes('líder') || rol.includes('lider')) mapa[eid].roles.lider++
         else if (rol.includes('guerrero')) mapa[eid].roles.guerrero++
@@ -94,10 +106,10 @@ export default function TemplariosPage() {
   const totalGeneral = stats.reduce((s, e) => s + e.total, 0)
 
   const ROLES = [
-    { key: 'lider', label: 'Líderes', color: '#004466', bg: '#e0f7fa' },
-    { key: 'guerrero', label: 'Guerreros', color: '#b45309', bg: '#fef3c7' },
-    { key: 'organizador', label: 'Organizadores', color: '#065f46', bg: '#d1fae5' },
-    { key: 'simpatizante', label: 'Simpatizantes', color: '#6b7280', bg: '#f3f4f6' },
+    { key: 'lider',        label: 'Líderes',        color: '#004466', bg: '#e0f7fa' },
+    { key: 'guerrero',     label: 'Guerreros',       color: '#b45309', bg: '#fef3c7' },
+    { key: 'organizador',  label: 'Organizadores',   color: '#065f46', bg: '#d1fae5' },
+    { key: 'simpatizante', label: 'Simpatizantes',   color: '#6b7280', bg: '#f3f4f6' },
   ]
 
   return (
@@ -142,10 +154,7 @@ export default function TemplariosPage() {
               const pct = totalGeneral > 0 ? Math.round((enc.total / totalGeneral) * 100) : 0
               return (
                 <div key={enc.encargado_id} className="card hover:shadow-md transition-shadow">
-                  {/* Cabecera */}
-                  <button
-                    className="w-full text-left"
-                    onClick={() => setExpandido(abierto ? null : enc.encargado_id)}>
+                  <button className="w-full text-left" onClick={() => setExpandido(abierto ? null : enc.encargado_id)}>
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 text-sm" style={{ background: '#004466' }}>
@@ -154,7 +163,7 @@ export default function TemplariosPage() {
                         <div className="min-w-0">
                           <p className="font-semibold text-sm leading-snug" style={{ color: 'var(--texto-principal)' }}>{enc.encargado_nombre}</p>
                           <p className="text-xs mt-0.5" style={{ color: 'var(--texto-secundario)' }}>
-                            {enc.sectores.join(', ')}
+                            {enc.sectores.map(s => s.nombre).join(', ')}
                           </p>
                         </div>
                       </div>
@@ -168,39 +177,48 @@ export default function TemplariosPage() {
                         </svg>
                       </div>
                     </div>
-
-                    {/* Barra de progreso */}
                     <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background: '#e0f7fa' }}>
                       <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: '#004466' }} />
                     </div>
                   </button>
 
-                  {/* Detalle expandible */}
                   {abierto && (
-                    <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--color-borde)' }}>
-                      <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--texto-secundario)' }}>Desglose por rol</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {ROLES.map(({ key, label, color, bg }) => (
-                          <div key={key} className="rounded-lg px-3 py-2 flex items-center justify-between" style={{ background: bg }}>
-                            <span className="text-xs font-medium" style={{ color }}>{label}</span>
-                            <span className="text-sm font-bold" style={{ color }}>{enc.roles[key as keyof RolCount]}</span>
-                          </div>
-                        ))}
-                        {enc.roles.otro > 0 && (
-                          <div className="rounded-lg px-3 py-2 flex items-center justify-between col-span-2" style={{ background: '#f3f4f6' }}>
-                            <span className="text-xs font-medium" style={{ color: '#6b7280' }}>Otros roles</span>
-                            <span className="text-sm font-bold" style={{ color: '#6b7280' }}>{enc.roles.otro}</span>
-                          </div>
-                        )}
+                    <div className="mt-4 pt-4 border-t space-y-4" style={{ borderColor: 'var(--color-borde)' }}>
+
+                      {/* Desglose por rol */}
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--texto-secundario)' }}>Desglose por rol</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {ROLES.map(({ key, label, color, bg }) => (
+                            <div key={key} className="rounded-lg px-3 py-2 flex items-center justify-between" style={{ background: bg }}>
+                              <span className="text-xs font-medium" style={{ color }}>{label}</span>
+                              <span className="text-sm font-bold" style={{ color }}>{enc.roles[key as keyof RolCount]}</span>
+                            </div>
+                          ))}
+                          {enc.roles.otro > 0 && (
+                            <div className="rounded-lg px-3 py-2 flex items-center justify-between col-span-2" style={{ background: '#f3f4f6' }}>
+                              <span className="text-xs font-medium" style={{ color: '#6b7280' }}>Otros roles</span>
+                              <span className="text-sm font-bold" style={{ color: '#6b7280' }}>{enc.roles.otro}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="mt-3">
-                        <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--texto-secundario)' }}>Sectores</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {enc.sectores.map((s) => (
-                            <span key={s} className="text-xs px-2 py-1 rounded-full font-medium" style={{ background: '#e0f7fa', color: '#004466' }}>{s}</span>
+
+                      {/* Sectores con conteo */}
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--texto-secundario)' }}>Afiliados por sector</p>
+                        <div className="space-y-1.5">
+                          {enc.sectores.sort((a, b) => b.total - a.total).map((s) => (
+                            <div key={s.nombre} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: '#f8fafc' }}>
+                              <span className="text-xs font-medium" style={{ color: 'var(--texto-principal)' }}>{s.nombre}</span>
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#e0f7fa', color: '#004466' }}>
+                                {s.total} afiliado{s.total !== 1 ? 's' : ''}
+                              </span>
+                            </div>
                           ))}
                         </div>
                       </div>
+
                     </div>
                   )}
                 </div>
