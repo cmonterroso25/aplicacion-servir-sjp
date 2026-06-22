@@ -59,3 +59,19 @@ export type AfiliadoConRelaciones = Afiliado & {
   sectores: { nombre: string; encargado_nombre: string | null } | null
   perfiles: { nombre_completo: string | null; email: string } | null
 }
+
+export type Reunion = {
+  id: number
+  titulo: string
+  descripcion: string | null
+  fecha: string
+  hora_inicio: string
+  hora_fin: string | null
+  lugar: string | null
+  creado_por: string
+  sector_id: number | null
+  tipo: 'general' | 'sector' | 'templarios'
+  created_at: string | null
+  perfiles?: { nombre_completo: string | null; email: string } | null
+  sectores?: { nombre: string } | null
+}
