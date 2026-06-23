@@ -61,8 +61,16 @@ function NuevoAfiliadoForm() {
       if (dpiParam)              setDpi(dpiParam)
       if (primerNombreParam)     setPrimerNombre(primerNombreParam)
       if (segundoNombreParam)    setSegundoNombre(segundoNombreParam)
-      if (primerApellidoParam)   setPrimerApellido(primerApellidoParam)
-      if (segundoApellidoParam)  setSegundoApellido(segundoApellidoParam)
+      if (primerApellidoParam) {
+          const partes = primerApellidoParam.trim().split(" ")
+          if (partes.length >= 2) {
+            setPrimerApellido(partes[0])
+            setSegundoApellido(partes.slice(1).join(" "))
+          } else {
+            setPrimerApellido(primerApellidoParam)
+          }
+        }
+      
 
       if (dpiParam) {
         setVotaPinula(true)
@@ -89,7 +97,7 @@ function NuevoAfiliadoForm() {
       
       const apellidos = (data.primer_apellido || "").trim().split(" ")
       if (apellidos.length >= 2) {
-        alert("Split: " + JSON.stringify(apellidos)); setPrimerApellido(apellidos[0])
+        setPrimerApellido(apellidos[0])
         setSegundoApellido(apellidos.slice(1).join(' '))
       } else {
         setPrimerApellido(data.primer_apellido || '')
