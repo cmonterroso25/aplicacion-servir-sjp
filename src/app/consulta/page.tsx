@@ -142,11 +142,10 @@ export default function ConsultaPage() {
               <div className="space-y-3">
                 {resultados.map((persona) => (
                   <div key={persona.id} className="card hover:shadow-md transition-shadow">
-
-                    <div className="flex justify-between items-center mb-2">
+                    <div className="flex flex-col items-end gap-2">
                       <span
                         className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-full"
-                        style={{ background: '#e0f7fa', color: '#004466' }}>
+                        style={{ background: '#dcfce7', color: '#166534' }}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                         </svg>
