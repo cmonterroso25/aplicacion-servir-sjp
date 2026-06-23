@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, type Sector, type Perfil } from '@/lib/supabase'
 import { TIPOS_UBICACION, OPCIONES_UBICACION, type TipoUbicacion } from '@/lib/ubicaciones'
 
 const ROLES_AFILIADO = ['Simpatizante', 'Organizador', 'Guerrero', 'Lider', 'Templario']
 
-export default function NuevoAfiliadoPage() {
+function NuevoAfiliadoForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
@@ -317,5 +317,17 @@ export default function NuevoAfiliadoPage() {
         </form>
       </main>
     </div>
+  )
+}
+
+export default function NuevoAfiliadoPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--color-fondo)' }}>
+        <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#004466' }}></div>
+      </div>
+    }>
+      <NuevoAfiliadoForm />
+    </Suspense>
   )
 }
