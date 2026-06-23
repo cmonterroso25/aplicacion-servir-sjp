@@ -89,7 +89,7 @@ function NuevoAfiliadoForm() {
       
       const apellidos = (data.primer_apellido || "").trim().split(" ")
       if (apellidos.length >= 2) {
-        setPrimerApellido(apellidos[0])
+        alert("Split: " + JSON.stringify(apellidos)); setPrimerApellido(apellidos[0])
         setSegundoApellido(apellidos.slice(1).join(' '))
       } else {
         setPrimerApellido(data.primer_apellido || '')
