@@ -65,6 +65,17 @@ export default function ConsultaPage() {
     [p.primer_nombre, p.segundo_nombre, p.primer_apellido, p.segundo_apellido]
       .filter(Boolean).join(' ')
 
+  const irAFiliar = (persona: Empadronado) => {
+    const params = new URLSearchParams({
+      dpi:              persona.dpi || '',
+      primer_nombre:    persona.primer_nombre || '',
+      segundo_nombre:   persona.segundo_nombre || '',
+      primer_apellido:  persona.primer_apellido || '',
+      segundo_apellido: persona.segundo_apellido || '',
+    })
+    router.push(`/afiliados/nuevo?${params.toString()}`)
+  }
+
   const BTN = { background: '#004466', color: '#ffffff' }
 
   return (
@@ -132,8 +143,7 @@ export default function ConsultaPage() {
                 {resultados.map((persona) => (
                   <div key={persona.id} className="card hover:shadow-md transition-shadow">
 
-                    {/* Badge arriba a la derecha */}
-                    <div className="flex justify-end mb-2">
+                    <div className="flex justify-between items-center mb-2">
                       <span
                         className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-full"
                         style={{ background: '#e0f7fa', color: '#004466' }}>
@@ -142,9 +152,18 @@ export default function ConsultaPage() {
                         </svg>
                         Vota aqui
                       </span>
+
+                      <button
+                        onClick={() => irAFiliar(persona)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-colors"
+                        style={{ background: '#004466', color: 'white' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Afiliar ahora
+                      </button>
                     </div>
 
-                    {/* Avatar + nombre */}
                     <div className="flex items-center gap-3 mb-4">
                       <div
                         className="w-10 h-10 rounded-full flex items-center justify-center text-white text-base font-bold flex-shrink-0"
@@ -156,7 +175,6 @@ export default function ConsultaPage() {
                       </h3>
                     </div>
 
-                    {/* Datos: cada campo en fila propia, sin grid */}
                     <div className="flex flex-col gap-2 text-sm">
                       <div className="flex gap-2">
                         <span className="font-medium w-20 flex-shrink-0" style={{ color: 'var(--texto-secundario)' }}>DPI:</span>

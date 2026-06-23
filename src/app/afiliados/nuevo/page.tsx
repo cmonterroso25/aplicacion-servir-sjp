@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, type Sector, type Perfil } from '@/lib/supabase'
 import { TIPOS_UBICACION, OPCIONES_UBICACION, type TipoUbicacion } from '@/lib/ubicaciones'
 
@@ -9,6 +9,7 @@ const ROLES_AFILIADO = ['Simpatizante', 'Organizador', 'Guerrero', 'Lider', 'Tem
 
 export default function NuevoAfiliadoPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [sectores, setSectores] = useState<Sector[]>([])
   const [loading, setLoading] = useState(false)
@@ -45,9 +46,26 @@ export default function NuevoAfiliadoPage() {
       const { data: s } = await supabase
         .from('sectores').select('*').order('nombre')
       if (s) setSectores(s)
+
+      const dpiParam             = searchParams.get('dpi')
+      const primerNombreParam    = searchParams.get('primer_nombre')
+      const segundoNombreParam   = searchParams.get('segundo_nombre')
+      const primerApellidoParam  = searchParams.get('primer_apellido')
+      const segundoApellidoParam = searchParams.get('segundo_apellido')
+
+      if (dpiParam)              setDpi(dpiParam)
+      if (primerNombreParam)     setPrimerNombre(primerNombreParam)
+      if (segundoNombreParam)    setSegundoNombre(segundoNombreParam)
+      if (primerApellidoParam)   setPrimerApellido(primerApellidoParam)
+      if (segundoApellidoParam)  setSegundoApellido(segundoApellidoParam)
+
+      if (dpiParam) {
+        setVotaPinula(true)
+        setMensajeDpi('Si vota en San Jose Pinula — datos autocompletados')
+      }
     }
     init()
-  }, [router])
+  }, [router, searchParams])
 
   const verificarDpi = async () => {
     const d = dpi.trim()
