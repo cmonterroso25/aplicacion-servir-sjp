@@ -32,7 +32,7 @@ function NuevoAfiliadoForm() {
   const [nombreUbicacion, setNombreUbicacion] = useState('')
   const [afiliadoPor, setAfiliadoPor] = useState('')
   const [rolAfiliado, setRolAfiliado] = useState('Simpatizante')
-  const [encargados, setEncargados] = useState<string[]>([])
+  const [encargados, setEncargados] = useState<{sector: string, encargado: string}[]>([])
 
   useEffect(() => {
     const init = async () => {
@@ -48,8 +48,8 @@ function NuevoAfiliadoForm() {
         .from('sectores').select('*').order('nombre')
       if (s) {
         setSectores(s)
-        const nombres = s.map((x: any) => x.encargado_nombre).filter(Boolean)
-        setEncargados([...new Set(nombres)] as string[])
+        const lista = s.filter((x: any) => x.encargado_nombre).map((x: any) => ({ sector: x.nombre, encargado: x.encargado_nombre }))
+        setEncargados(lista)
       }
 
       const dpiParam             = searchParams.get('dpi')
@@ -248,7 +248,7 @@ function NuevoAfiliadoForm() {
                 <select value={afiliadoPor} onChange={(e) => setAfiliadoPor(e.target.value)} className="input-field">
                     <option value="">Selecciona un encargado...</option>
                     {encargados.map((enc) => (
-                      <option key={enc} value={enc}>{enc}</option>
+                      <option key={enc.encargado} value={enc.encargado}>{enc.sector} ({enc.encargado})</option>
                     ))}
                   </select>
               </div>
