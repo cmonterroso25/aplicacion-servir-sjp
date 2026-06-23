@@ -248,7 +248,7 @@ function NuevoAfiliadoForm() {
                 <select value={afiliadoPor} onChange={(e) => setAfiliadoPor(e.target.value)} className="input-field">
                     <option value="">Selecciona un encargado...</option>
                     {encargados.map((enc) => (
-                      <option key={enc.encargado} value={enc.encargado}>{enc.sector} ({enc.encargado})</option>
+                      <option key={enc.encargado} value={enc.encargado}>{enc.encargado}</option>
                     ))}
                   </select>
               </div>
@@ -280,7 +280,7 @@ function NuevoAfiliadoForm() {
               <select value={sectorId} onChange={(e) => setSectorId(e.target.value)} className="input-field">
                 <option value="">Selecciona un sector...</option>
                 {sectores.map((s) => (
-                  <option key={s.id} value={s.id}>{s.nombre}</option>
+                  <option key={s.id} value={s.id}>{s.nombre}{s.encargado_nombre ? ` (${s.encargado_nombre})` : ""}</option>
                 ))}
               </select>
             </div>
