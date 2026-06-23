@@ -86,7 +86,7 @@ function NuevoAfiliadoForm() {
     if (data) {
       setPrimerNombre(data.primer_nombre || '')
       setSegundoNombre(data.segundo_nombre || '')
-      console.log("DATA APELLIDOS:", JSON.stringify(data))
+      
       const apellidos = (data.primer_apellido || "").trim().split(" ")
       if (apellidos.length >= 2) {
         setPrimerApellido(apellidos[0])
