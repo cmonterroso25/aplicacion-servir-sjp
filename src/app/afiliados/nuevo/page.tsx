@@ -32,6 +32,7 @@ function NuevoAfiliadoForm() {
   const [nombreUbicacion, setNombreUbicacion] = useState('')
   const [afiliadoPor, setAfiliadoPor] = useState('')
   const [rolAfiliado, setRolAfiliado] = useState('Simpatizante')
+  const [encargados, setEncargados] = useState<string[]>([])
 
   useEffect(() => {
     const init = async () => {
@@ -45,7 +46,11 @@ function NuevoAfiliadoForm() {
       }
       const { data: s } = await supabase
         .from('sectores').select('*').order('nombre')
-      if (s) setSectores(s)
+      if (s) {
+        setSectores(s)
+        const nombres = s.map((x: any) => x.encargado_nombre).filter(Boolean)
+        setEncargados([...new Set(nombres)] as string[])
+      }
 
       const dpiParam             = searchParams.get('dpi')
       const primerNombreParam    = searchParams.get('primer_nombre')
@@ -81,7 +86,7 @@ function NuevoAfiliadoForm() {
     if (data) {
       setPrimerNombre(data.primer_nombre || '')
       setSegundoNombre(data.segundo_nombre || '')
-      const apellidos = (data.primer_apellido || '').trim().split(' ')
+      const apellidos = (data.primer_apellido || "").trim().split(" ")
       if (apellidos.length >= 2) {
         setPrimerApellido(apellidos[0])
         setSegundoApellido(apellidos.slice(1).join(' '))
@@ -231,7 +236,12 @@ function NuevoAfiliadoForm() {
               </div>
               <div className="col-span-2">
                 <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--texto-secundario)' }}>Afiliado por</label>
-                <input type="text" value={afiliadoPor} onChange={(e) => setAfiliadoPor(e.target.value)} className="input-field" placeholder="Nombre de quien afilia" />
+                <select value={afiliadoPor} onChange={(e) => setAfiliadoPor(e.target.value)} className="input-field">
+                    <option value="">Selecciona un encargado...</option>
+                    {encargados.map((enc) => (
+                      <option key={enc} value={enc}>{enc}</option>
+                    ))}
+                  </select>
               </div>
             </div>
           </div>
