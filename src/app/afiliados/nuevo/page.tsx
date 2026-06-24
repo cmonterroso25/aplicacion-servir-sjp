@@ -106,6 +106,21 @@ function NuevoAfiliadoForm() {
     if (!perfil) return
     setLoading(true)
     setError('')
+
+    if (dpi.trim()) {
+      const { data: existente } = await supabase
+        .from('afiliados')
+        .select('id')
+        .eq('dpi', dpi.trim())
+        .maybeSingle()
+
+      if (existente) {
+        setError('Esta persona ya se encuentra afiliada')
+        setLoading(false)
+        return
+      }
+    }
+
     const { error: err } = await supabase.from('afiliados').insert({
       primer_apellido: primerApellido.toUpperCase(),
       segundo_apellido: segundoApellido.toUpperCase() || null,
@@ -122,11 +137,17 @@ function NuevoAfiliadoForm() {
       afiliado_por: afiliadoPor,
       rol_afiliado: rolAfiliado,
     })
+
     if (err) {
-      setError('Error al guardar. Intenta de nuevo.')
+      if (err.code === '23505') {
+        setError('Esta persona ya se encuentra afiliada')
+      } else {
+        setError('Error al guardar. Intenta de nuevo.')
+      }
       setLoading(false)
       return
     }
+
     setGuardado(true)
     setTimeout(() => router.replace('/afiliados'), 1500)
   }
