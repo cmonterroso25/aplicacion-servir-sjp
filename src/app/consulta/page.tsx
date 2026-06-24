@@ -10,6 +10,7 @@ export default function ConsultaPage() {
   const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [query, setQuery] = useState('')
   const [resultados, setResultados] = useState<Empadronado[]>([])
+  const [afiliadosExistentes, setAfiliadosExistentes] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
   const [buscado, setBuscado] = useState(false)
   const [error, setError] = useState('')
@@ -42,6 +43,17 @@ export default function ConsultaPage() {
         .limit(5)
       if (supaError) throw supaError
       setResultados(data || [])
+
+      const dpis = (data || []).map((p) => p.dpi).filter(Boolean) as string[]
+      if (dpis.length > 0) {
+        const { data: afiliadosData } = await supabase
+          .from('afiliados')
+          .select('dpi')
+          .in('dpi', dpis)
+        setAfiliadosExistentes(new Set((afiliadosData || []).map((a) => a.dpi).filter(Boolean) as string[]))
+      } else {
+        setAfiliadosExistentes(new Set())
+      }
     } catch {
       setError('Error al realizar la busqueda. Intenta de nuevo.')
     } finally {
@@ -57,6 +69,7 @@ export default function ConsultaPage() {
   const limpiar = () => {
     setQuery('')
     setResultados([])
+    setAfiliadosExistentes(new Set())
     setBuscado(false)
     setError('')
   }
@@ -152,15 +165,26 @@ export default function ConsultaPage() {
                         Vota aqui
                       </span>
 
-                      <button
-                        onClick={() => irAFiliar(persona)}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-colors"
-                        style={{ background: '#004466', color: 'white' }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Afiliar ahora
-                      </button>
+                      {afiliadosExistentes.has(persona.dpi) ? (
+                        <span
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full"
+                          style={{ background: '#fee2e2', color: '#991b1b' }}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          Esta persona ya se encuentra afiliada
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => irAFiliar(persona)}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-colors"
+                          style={{ background: '#004466', color: 'white' }}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                          </svg>
+                          Afiliar ahora
+                        </button>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-3 mb-4">
