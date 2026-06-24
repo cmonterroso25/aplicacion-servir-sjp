@@ -24,6 +24,7 @@ type EncargadoStats = {
   total: number
   sectores: SectorCount[]
   roles: RolCount
+  afiliados_por: Record<string, number>
 }
 
 export default function TemplariosPage() {
@@ -52,6 +53,7 @@ export default function TemplariosPage() {
         .select(`
           encargado_id,
           rol_afiliado,
+          afiliado_por,
           sectores ( nombre ),
           perfiles ( nombre_completo, email )
         `)
@@ -66,6 +68,7 @@ export default function TemplariosPage() {
         const nombre = (row.perfiles as any)?.nombre_completo || (row.perfiles as any)?.email || 'Sin nombre'
         const sectorNombre = (row.sectores as any)?.nombre || 'Sin sector'
         const rol = (row.rol_afiliado || '').toLowerCase()
+        const afiliadoPor = (row.afiliado_por as string) || 'Sin registrar'
 
         if (!mapa[eid]) {
           mapa[eid] = {
@@ -73,19 +76,21 @@ export default function TemplariosPage() {
             encargado_nombre: nombre,
             total: 0,
             sectores: [],
-            roles: { lider: 0, guerrero: 0, organizador: 0, simpatizante: 0, otro: 0 }
+            roles: { lider: 0, guerrero: 0, organizador: 0, simpatizante: 0, otro: 0 },
+            afiliados_por: {}
           }
         }
 
         mapa[eid].total++
 
-        // Contar por sector
         const sectorExistente = mapa[eid].sectores.find(s => s.nombre === sectorNombre)
         if (sectorExistente) {
           sectorExistente.total++
         } else {
           mapa[eid].sectores.push({ nombre: sectorNombre, total: 1 })
         }
+
+        mapa[eid].afiliados_por[afiliadoPor] = (mapa[eid].afiliados_por[afiliadoPor] || 0) + 1
 
         if (rol.includes('líder') || rol.includes('lider')) mapa[eid].roles.lider++
         else if (rol.includes('guerrero')) mapa[eid].roles.guerrero++
@@ -117,7 +122,6 @@ export default function TemplariosPage() {
       <NavBar rol={perfil?.rol || ''} />
 
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-5">
-        {/* Resumen general */}
         <div className="card">
           <h2 className="font-semibold text-base mb-1" style={{ color: 'var(--texto-principal)' }}>Templarios</h2>
           <p className="text-sm mb-4" style={{ color: 'var(--texto-secundario)' }}>Estadísticas por encargado de sector</p>
@@ -133,7 +137,6 @@ export default function TemplariosPage() {
           </div>
         </div>
 
-        {/* Cards por encargado */}
         {loading ? (
           <div className="card text-center py-10">
             <svg className="animate-spin h-6 w-6 mx-auto mb-2" fill="none" viewBox="0 0 24 24" style={{ color: '#004466' }}>
@@ -162,7 +165,6 @@ export default function TemplariosPage() {
                         </div>
                         <div className="min-w-0">
                           <p className="font-semibold text-sm leading-snug" style={{ color: 'var(--texto-principal)' }}>{enc.encargado_nombre}</p>
-
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
@@ -183,7 +185,6 @@ export default function TemplariosPage() {
                   {abierto && (
                     <div className="mt-4 pt-4 border-t space-y-4" style={{ borderColor: 'var(--color-borde)' }}>
 
-                      {/* Desglose por rol */}
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--texto-secundario)' }}>Desglose por rol</p>
                         <div className="grid grid-cols-2 gap-2">
@@ -202,7 +203,20 @@ export default function TemplariosPage() {
                         </div>
                       </div>
 
-                      {/* Sectores con conteo */}
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--texto-secundario)' }}>Afiliado por</p>
+                        <div className="space-y-1.5">
+                          {Object.entries(enc.afiliados_por).sort((a, b) => b[1] - a[1]).map(([nombre, total]) => (
+                            <div key={nombre} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: '#f8fafc' }}>
+                              <span className="text-xs font-medium" style={{ color: 'var(--texto-principal)' }}>{nombre}</span>
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#e0f7fa', color: '#004466' }}>
+                                {total} afiliado{total !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--texto-secundario)' }}>Afiliados por sector</p>
                         <div className="space-y-1.5">
