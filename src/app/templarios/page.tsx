@@ -18,19 +18,17 @@ type SectorCount = {
   total: number
 }
 
-type EncargadoStats = {
-  encargado_id: string
-  encargado_nombre: string
+type AfiliadoPorStats = {
+  afiliado_por: string
   total: number
   sectores: SectorCount[]
   roles: RolCount
-  afiliados_por: Record<string, number>
 }
 
 export default function TemplariosPage() {
   const router = useRouter()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
-  const [stats, setStats] = useState<EncargadoStats[]>([])
+  const [stats, setStats] = useState<AfiliadoPorStats[]>([])
   const [loading, setLoading] = useState(true)
   const [expandido, setExpandido] = useState<string | null>(null)
 
@@ -51,52 +49,44 @@ export default function TemplariosPage() {
       const { data, error } = await supabase
         .from('afiliados')
         .select(`
-          encargado_id,
-          rol_afiliado,
           afiliado_por,
-          sectores ( nombre ),
-          perfiles ( nombre_completo, email )
+          rol_afiliado,
+          sectores ( nombre )
         `)
-        .not('encargado_id', 'is', null)
+        .not('afiliado_por', 'is', null)
 
       if (error) throw error
 
-      const mapa: Record<string, EncargadoStats> = {}
+      const mapa: Record<string, AfiliadoPorStats> = {}
 
       for (const row of data || []) {
-        const eid = row.encargado_id as string
-        const nombre = (row.perfiles as any)?.nombre_completo || (row.perfiles as any)?.email || 'Sin nombre'
+        const key = (row.afiliado_por as string) || 'Sin registrar'
         const sectorNombre = (row.sectores as any)?.nombre || 'Sin sector'
         const rol = (row.rol_afiliado || '').toLowerCase()
-        const afiliadoPor = (row.afiliado_por as string) || 'Sin registrar'
 
-        if (!mapa[eid]) {
-          mapa[eid] = {
-            encargado_id: eid,
-            encargado_nombre: nombre,
+        if (!mapa[key]) {
+          mapa[key] = {
+            afiliado_por: key,
             total: 0,
             sectores: [],
-            roles: { lider: 0, guerrero: 0, organizador: 0, simpatizante: 0, otro: 0 },
-            afiliados_por: {}
+            roles: { lider: 0, guerrero: 0, organizador: 0, simpatizante: 0, otro: 0 }
           }
         }
 
-        mapa[eid].total++
+        mapa[key].total++
 
-        const sectorExistente = mapa[eid].sectores.find(s => s.nombre === sectorNombre)
+        const sectorExistente = mapa[key].sectores.find(s => s.nombre === sectorNombre)
         if (sectorExistente) {
           sectorExistente.total++
         } else {
-          mapa[eid].sectores.push({ nombre: sectorNombre, total: 1 })
+          mapa[key].sectores.push({ nombre: sectorNombre, total: 1 })
         }
 
-        mapa[eid].afiliados_por[afiliadoPor] = (mapa[eid].afiliados_por[afiliadoPor] || 0) + 1
-
-        if (rol.includes('líder') || rol.includes('lider')) mapa[eid].roles.lider++
-        else if (rol.includes('guerrero')) mapa[eid].roles.guerrero++
-        else if (rol.includes('organizador')) mapa[eid].roles.organizador++
-        else if (rol.includes('simpatizante')) mapa[eid].roles.simpatizante++
-        else mapa[eid].roles.otro++
+        if (rol.includes('líder') || rol.includes('lider')) mapa[key].roles.lider++
+        else if (rol.includes('guerrero')) mapa[key].roles.guerrero++
+        else if (rol.includes('organizador')) mapa[key].roles.organizador++
+        else if (rol.includes('simpatizante')) mapa[key].roles.simpatizante++
+        else mapa[key].roles.otro++
       }
 
       const resultado = Object.values(mapa).sort((a, b) => b.total - a.total)
@@ -124,7 +114,7 @@ export default function TemplariosPage() {
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-5">
         <div className="card">
           <h2 className="font-semibold text-base mb-1" style={{ color: 'var(--texto-principal)' }}>Templarios</h2>
-          <p className="text-sm mb-4" style={{ color: 'var(--texto-secundario)' }}>Estadísticas por encargado de sector</p>
+          <p className="text-sm mb-4" style={{ color: 'var(--texto-secundario)' }}>Estadísticas por quien afilió</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl p-3 text-center" style={{ background: '#e0f7fa' }}>
               <p className="text-2xl font-bold" style={{ color: '#004466' }}>{totalGeneral}</p>
@@ -148,23 +138,23 @@ export default function TemplariosPage() {
         ) : stats.length === 0 ? (
           <div className="card text-center py-10">
             <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>Sin datos</p>
-            <p className="text-sm mt-1" style={{ color: 'var(--texto-secundario)' }}>No hay afiliados con encargado asignado.</p>
+            <p className="text-sm mt-1" style={{ color: 'var(--texto-secundario)' }}>No hay afiliados registrados.</p>
           </div>
         ) : (
           <div className="space-y-3">
             {stats.map((enc) => {
-              const abierto = expandido === enc.encargado_id
+              const abierto = expandido === enc.afiliado_por
               const pct = totalGeneral > 0 ? Math.round((enc.total / totalGeneral) * 100) : 0
               return (
-                <div key={enc.encargado_id} className="card hover:shadow-md transition-shadow">
-                  <button className="w-full text-left" onClick={() => setExpandido(abierto ? null : enc.encargado_id)}>
+                <div key={enc.afiliado_por} className="card hover:shadow-md transition-shadow">
+                  <button className="w-full text-left" onClick={() => setExpandido(abierto ? null : enc.afiliado_por)}>
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 text-sm" style={{ background: '#004466' }}>
-                          {enc.encargado_nombre.charAt(0).toUpperCase()}
+                          {enc.afiliado_por.charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-semibold text-sm leading-snug" style={{ color: 'var(--texto-principal)' }}>{enc.encargado_nombre}</p>
+                          <p className="font-semibold text-sm leading-snug" style={{ color: 'var(--texto-principal)' }}>{enc.afiliado_por}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
@@ -200,20 +190,6 @@ export default function TemplariosPage() {
                               <span className="text-sm font-bold" style={{ color: '#6b7280' }}>{enc.roles.otro}</span>
                             </div>
                           )}
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--texto-secundario)' }}>Afiliado por</p>
-                        <div className="space-y-1.5">
-                          {Object.entries(enc.afiliados_por).sort((a, b) => b[1] - a[1]).map(([nombre, total]) => (
-                            <div key={nombre} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: '#f8fafc' }}>
-                              <span className="text-xs font-medium" style={{ color: 'var(--texto-principal)' }}>{nombre}</span>
-                              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#e0f7fa', color: '#004466' }}>
-                                {total} afiliado{total !== 1 ? 's' : ''}
-                              </span>
-                            </div>
-                          ))}
                         </div>
                       </div>
 
