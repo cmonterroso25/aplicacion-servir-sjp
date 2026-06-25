@@ -20,7 +20,11 @@ type Usuario = {
   created_at: string
 }
 
-type Vista = 'sectores' | 'usuarios'
+type AfiliadoPor = {
+  id: number
+  nombre: string
+}
+type Vista = 'sectores' | 'usuarios' | 'afiliado_por'
 
 export default function AdminPage() {
   const router = useRouter()
@@ -46,6 +50,12 @@ export default function AdminPage() {
 
   const [error, setError] = useState('')
   const [exito, setExito] = useState('')
+  // Afiliado por
+  const [afiliadoPorList, setAfiliadoPorList] = useState<AfiliadoPor[]>([])
+  const [mostrarFormAP, setMostrarFormAP] = useState(false)
+  const [editandoAP, setEditandoAP] = useState<AfiliadoPor | null>(null)
+  const [nombreAP, setNombreAP] = useState('')
+  const [loadingAP, setLoadingAP] = useState(false)
 
   useEffect(() => {
     const init = async () => {
@@ -66,6 +76,8 @@ export default function AdminPage() {
     if (s) setSectores(s)
     const { data: u } = await supabase.from('perfiles').select('*').order('nombre_completo')
     if (u) setUsuarios(u)
+    const { data: ap } = await supabase.from('afiliado_por').select('*').order('nombre')
+    if (ap) setAfiliadoPorList(ap)
     setLoading(false)
   }, [])
 
@@ -186,6 +198,14 @@ export default function AdminPage() {
               ? { background: '#004466', color: 'white', borderColor: '#004466' }
               : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
             Usuarios ({usuarios.length})
+          </button>
+          <button
+            onClick={() => setVista('afiliado_por')}
+            className="px-4 py-2 text-sm font-medium rounded-lg border transition-all"
+            style={vista === 'afiliado_por'
+              ? { background: '#004466', color: 'white', borderColor: '#004466' }
+              : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
+            Afiliado por ({afiliadoPorList.length})
           </button>
         </div>
 

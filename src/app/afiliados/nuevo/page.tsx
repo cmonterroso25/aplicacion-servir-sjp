@@ -46,11 +46,10 @@ function NuevoAfiliadoForm() {
       }
       const { data: s } = await supabase
         .from('sectores').select('*').order('nombre')
-      if (s) {
-        setSectores(s)
-        const lista = s.filter((x: any) => x.encargado_nombre).map((x: any) => ({ sector: x.nombre, encargado: x.encargado_nombre }))
-        setEncargados(lista)
-      }
+      if (s) setSectores(s)
+      const { data: ap } = await supabase
+        .from('afiliado_por').select('*').order('nombre')
+      if (ap) setEncargados(ap.map((x: any) => ({ sector: '', encargado: x.nombre })))
 
       const dpiParam             = searchParams.get('dpi')
       const primerNombreParam    = searchParams.get('primer_nombre')
