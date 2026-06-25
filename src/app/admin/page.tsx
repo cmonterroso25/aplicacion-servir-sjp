@@ -148,6 +148,7 @@ export default function AdminPage() {
     admin:       { bg: '#ede7f6', color: '#4527a0' },
     colaborador: { bg: '#e0f7fa', color: '#004466' },
     encargado:   { bg: '#e8f5e9', color: '#166534' },
+    lider:       { bg: '#fff3e0', color: '#e65100' },
   }
 
   return (
@@ -267,7 +268,7 @@ export default function AdminPage() {
                     <div>
                       <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--texto-secundario)' }}>Rol</label>
                       <div className="flex gap-2">
-                        {['admin', 'colaborador', 'encargado'].map((r) => (
+                        {['admin', 'colaborador', 'encargado', 'lider'].map((r) => (
                           <button
                             key={r}
                             type="button"
