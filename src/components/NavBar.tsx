@@ -61,12 +61,14 @@ export default function NavBar({ rol }: Props) {
     },
   ]
 
-  // El rol "lider" solo tiene acceso a la pantalla de Afiliados
+  // El rol "lider" solo tiene acceso a Empadronados
   // El rol "encargado" solo tiene acceso a Empadronados y Afiliados
-  const tabs = rol === 'lider'
+  const tabs = !rol
+    ? []
+    : rol === 'lider'
     ? tabsCompletos.filter((t) => t.href === '/consulta')
     : rol === 'encargado'
-    ? tabsCompletos.filter((t) => t.href === '/consulta')
+    ? tabsCompletos.filter((t) => ['/consulta', '/afiliados'].includes(t.href))
     : tabsCompletos
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
