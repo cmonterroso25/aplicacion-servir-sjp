@@ -8,6 +8,7 @@ export type TipoUbicacion =
   | 'colonia'
   | 'callejon'
   | 'barrio'
+  | 'area'
 
 export const TIPOS_UBICACION: { value: TipoUbicacion; label: string }[] = [
   { value: 'zona', label: 'Zona' },
@@ -19,6 +20,7 @@ export const TIPOS_UBICACION: { value: TipoUbicacion; label: string }[] = [
   { value: 'colonia', label: 'Colonia' },
   { value: 'callejon', label: 'Callejon' },
   { value: 'barrio', label: 'Barrio' },
+  { value: 'area', label: 'Area' },
 ]
 
 export const OPCIONES_UBICACION: Record<TipoUbicacion, string[]> = {
@@ -45,4 +47,5 @@ export const OPCIONES_UBICACION: Record<TipoUbicacion, string[]> = {
   colonia: [],
   callejon: [],
   barrio: [],
+  area: ['San Luis Letran', 'San Luis Puerta Negra', 'Los de a 20'],
 }
