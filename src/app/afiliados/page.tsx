@@ -65,6 +65,7 @@ export default function AfiliadosPage() {
       const { data: p } = await supabase
         .from('perfiles').select('*').eq('id', session.user.id).single()
       if (p) setPerfil(p)
+      if (p?.rol === 'lider') { router.replace('/consulta'); return }
 
       const { data: sData } = await supabase.from('sectores').select('*').order('nombre')
       setSectoresList(sData || [])
