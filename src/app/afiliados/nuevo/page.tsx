@@ -149,7 +149,7 @@ function NuevoAfiliadoForm() {
     }
 
     setGuardado(true)
-    setTimeout(() => router.replace('/afiliados'), 1500)
+    setTimeout(() => router.replace('/consulta'), 1500)
   }
 
   const opcionesUbicacion = tipoUbicacion ? OPCIONES_UBICACION[tipoUbicacion] : []
