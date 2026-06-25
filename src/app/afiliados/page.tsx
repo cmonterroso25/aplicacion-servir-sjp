@@ -107,7 +107,7 @@ export default function AfiliadosPage() {
 
   const sectoresUnicos = useMemo(() => {
     const set = new Set<string>()
-    afiliados.forEach((a) => { if (a.sectores?.nombre) set.add(a.sectores.nombre) })
+    afiliados.forEach((a) => { if ((a as any).sectores?.nombre) set.add((a as any).sectores.nombre) })
     return Array.from(set).sort()
   }, [afiliados])
 
@@ -125,9 +125,9 @@ export default function AfiliadosPage() {
       case 'fecha_nacimiento': return a.fecha_nacimiento || ''
       case 'genero': return (a.genero || '').toLowerCase()
       case 'rol': return ((a as any).rol_afiliado || 'Simpatizante').toLowerCase()
-      case 'sector': return (a.sectores?.nombre || '').toLowerCase()
+      case 'sector': return ((a as any).sectores?.nombre || '').toLowerCase()
       case 'ubicacion': return (a.nombre_ubicacion || '').toLowerCase()
-      case 'encargado': return ((a.sectores as any)?.encargado_nombre || '').toLowerCase()
+      case 'encargado': return (((a as any).sectores)?.encargado_nombre || '').toLowerCase()
       case 'afiliado_por': return ((a as any).afiliado_por || '').toLowerCase()
       case 'vota': return a.vota_en_pinula ? '1' : '0'
       case 'fecha_registro': return (a.created_at as any) || ''
@@ -138,7 +138,7 @@ export default function AfiliadosPage() {
   const afiliadosFiltrados = useMemo(() => {
     let lista = afiliados.filter((a) => {
       const rol = (a as any).rol_afiliado || 'Simpatizante'
-      const encargadoSector = (a.sectores as any)?.encargado_nombre || ''
+      const encargadoSector = ((a as any).sectores)?.encargado_nombre || ''
       const ubicacion = a.nombre_ubicacion || ''
       const afiliadoPor = (a as any).afiliado_por || ''
       const fechaNac = formatFecha(a.fecha_nacimiento)
@@ -150,7 +150,7 @@ export default function AfiliadosPage() {
       if (filtros.fecha_nacimiento && !fechaNac.includes(filtros.fecha_nacimiento)) return false
       if (filtros.genero && a.genero !== filtros.genero) return false
       if (filtros.rol && rol !== filtros.rol) return false
-      if (filtros.sector && a.sectores?.nombre !== filtros.sector) return false
+      if (filtros.sector && (a as any).sectores?.nombre !== filtros.sector) return false
       if (filtros.ubicacion && !ubicacion.toLowerCase().includes(filtros.ubicacion.toLowerCase())) return false
       if (filtros.encargado && !encargadoSector.toLowerCase().includes(filtros.encargado.toLowerCase())) return false
       if (filtros.afiliado_por && !afiliadoPor.toLowerCase().includes(filtros.afiliado_por.toLowerCase())) return false
@@ -334,7 +334,7 @@ export default function AfiliadosPage() {
                   afiliadosFiltrados.map((a, idx) => {
                     const rol = (a as any).rol_afiliado || 'Simpatizante'
                     const estiloRol = colorRol[rol] || colorRol['Simpatizante']
-                    const encargadoSector = (a.sectores as any)?.encargado_nombre
+                    const encargadoSector = ((a as any).sectores)?.encargado_nombre
                     return (
                       <tr
                         key={a.id}
@@ -357,7 +357,7 @@ export default function AfiliadosPage() {
                             {rol}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 whitespace-nowrap">{a.sectores?.nombre || '—'}</td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">{(a as any).sectores?.nombre || "—"}</td>
                         <td className="px-3 py-2.5 whitespace-nowrap">
                           {a.tipo_ubicacion && a.nombre_ubicacion ? `${a.nombre_ubicacion}` : '—'}
                         </td>
