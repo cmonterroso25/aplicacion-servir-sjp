@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { exportToExcel } from '@/lib/exportXlsx'
 import NavBar from '@/components/NavBar'
@@ -29,6 +30,7 @@ const mapAfiliado = (a: any, sectoresMap: Record<number, string>) => ({
 })
 
 export default function ReportesPage() {
+  const router = useRouter()
   const [rol, setRol] = useState<string>()
   const [sectores, setSectores] = useState<Sector[]>([])
   const [afiliadoPorOptions, setAfiliadoPorOptions] = useState<string[]>([])
@@ -48,6 +50,7 @@ export default function ReportesPage() {
           .select('rol')
           .eq('id', user.id)
           .single()
+        if (perfil?.rol === 'lider') { router.replace('/afiliados'); return }
         setRol(perfil?.rol)
       }
 

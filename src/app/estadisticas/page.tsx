@@ -32,6 +32,7 @@ export default function EstadisticasPage() {
       const { data: p } = await supabase
         .from('perfiles').select('*').eq('id', session.user.id).single()
       if (p) {
+        if (p.rol === 'lider') { router.replace('/afiliados'); return }
         setPerfil(p)
         await cargarEstadisticas(p.rol, session.user.id)
       }

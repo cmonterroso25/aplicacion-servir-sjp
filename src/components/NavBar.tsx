@@ -16,7 +16,7 @@ export default function NavBar({ rol }: Props) {
     router.replace('/login')
   }
 
-  const tabs = [
+  const tabsCompletos = [
     {
       label: 'Empadronados', href: '/consulta', icon: (
         <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -60,6 +60,11 @@ export default function NavBar({ rol }: Props) {
       )
     },
   ]
+
+  // El rol "lider" solo tiene acceso a la pantalla de Afiliados
+  const tabs = rol === 'lider'
+    ? tabsCompletos.filter((t) => t.href === '/afiliados')
+    : tabsCompletos
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
 

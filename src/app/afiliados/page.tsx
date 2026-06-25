@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, type Afiliado, type Perfil } from '@/lib/supabase'
+import { supabase, type Afiliado, type Perfil, type Sector } from '@/lib/supabase'
 import NavBar from '@/components/NavBar'
 
 const colorRol: Record<string, { bg: string; color: string }> = {
@@ -18,10 +18,27 @@ const ROLES = ['Simpatizante', 'Organizador', 'Guerrero', 'Lider', 'Templario']
 type SortField = 'nombre' | 'dpi' | 'telefono' | 'fecha_nacimiento' | 'genero' | 'rol' | 'sector' | 'ubicacion' | 'encargado' | 'afiliado_por' | 'vota' | 'fecha_registro'
 type SortDir = 'asc' | 'desc'
 
+type Draft = {
+  primer_apellido: string
+  segundo_apellido: string
+  primer_nombre: string
+  segundo_nombre: string
+  dpi: string
+  telefono: string
+  fecha_nacimiento: string
+  genero: string
+  rol_afiliado: string
+  sector_id: string
+  nombre_ubicacion: string
+  afiliado_por: string
+  vota_en_pinula: boolean
+}
+
 export default function AfiliadosPage() {
   const router = useRouter()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [afiliados, setAfiliados] = useState<Afiliado[]>([])
+  const [sectoresList, setSectoresList] = useState<Sector[]>([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [total, setTotal] = useState(0)
@@ -35,6 +52,12 @@ export default function AfiliadosPage() {
     encargado: '', afiliado_por: '', vota: '', fecha_registro: '',
   })
 
+  const [modoEdicion, setModoEdicion] = useState(false)
+  const [editandoId, setEditandoId] = useState<number | null>(null)
+  const [draft, setDraft] = useState<Draft | null>(null)
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false)
+  const [errorEdicion, setErrorEdicion] = useState('')
+
   useEffect(() => {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -42,6 +65,10 @@ export default function AfiliadosPage() {
       const { data: p } = await supabase
         .from('perfiles').select('*').eq('id', session.user.id).single()
       if (p) setPerfil(p)
+
+      const { data: sData } = await supabase.from('sectores').select('*').order('nombre')
+      setSectoresList(sData || [])
+
       await cargarAfiliados(p?.rol || 'encargado', session.user.id, '')
     }
     init()
@@ -179,9 +206,97 @@ export default function AfiliadosPage() {
     return <span className="ml-1" style={{ color: '#004466' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
   }
 
+  const iniciarEdicion = (a: Afiliado) => {
+    setErrorEdicion('')
+    setEditandoId(a.id)
+    setDraft({
+      primer_apellido: a.primer_apellido || '',
+      segundo_apellido: a.segundo_apellido || '',
+      primer_nombre: a.primer_nombre || '',
+      segundo_nombre: a.segundo_nombre || '',
+      dpi: a.dpi || '',
+      telefono: a.telefono || '',
+      fecha_nacimiento: a.fecha_nacimiento || '',
+      genero: a.genero || '',
+      rol_afiliado: (a as any).rol_afiliado || 'Simpatizante',
+      sector_id: a.sector_id ? String(a.sector_id) : '',
+      nombre_ubicacion: a.nombre_ubicacion || '',
+      afiliado_por: (a as any).afiliado_por || '',
+      vota_en_pinula: a.vota_en_pinula ?? true,
+    })
+  }
+
+  const cancelarEdicion = () => {
+    setEditandoId(null)
+    setDraft(null)
+    setErrorEdicion('')
+  }
+
+  const guardarEdicion = async () => {
+    if (!draft || editandoId === null) return
+    if (!draft.primer_apellido.trim() || !draft.primer_nombre.trim()) {
+      setErrorEdicion('Nombre y apellido son obligatorios.')
+      return
+    }
+    setGuardandoEdicion(true)
+    setErrorEdicion('')
+
+    if (draft.dpi.trim()) {
+      const { data: existente } = await supabase
+        .from('afiliados')
+        .select('id')
+        .eq('dpi', draft.dpi.trim())
+        .neq('id', editandoId)
+        .maybeSingle()
+      if (existente) {
+        setErrorEdicion('Esta persona ya se encuentra afiliada')
+        setGuardandoEdicion(false)
+        return
+      }
+    }
+
+    const { data: actualizado, error: err } = await supabase
+      .from('afiliados')
+      .update({
+        primer_apellido: draft.primer_apellido.toUpperCase(),
+        segundo_apellido: draft.segundo_apellido.toUpperCase() || null,
+        primer_nombre: draft.primer_nombre.toUpperCase(),
+        segundo_nombre: draft.segundo_nombre.toUpperCase() || null,
+        dpi: draft.dpi || null,
+        telefono: draft.telefono || null,
+        fecha_nacimiento: draft.fecha_nacimiento || null,
+        genero: draft.genero || null,
+        rol_afiliado: draft.rol_afiliado,
+        sector_id: draft.sector_id ? parseInt(draft.sector_id) : null,
+        nombre_ubicacion: draft.nombre_ubicacion || null,
+        afiliado_por: draft.afiliado_por || null,
+        vota_en_pinula: draft.vota_en_pinula,
+      })
+      .eq('id', editandoId)
+      .select('*, sectores(nombre, encargado_nombre), perfiles(nombre_completo, email)')
+      .single()
+
+    if (err) {
+      if ((err as any).code === '23505') {
+        setErrorEdicion('Esta persona ya se encuentra afiliada')
+      } else {
+        setErrorEdicion('Error al guardar los cambios. Intenta de nuevo.')
+      }
+      setGuardandoEdicion(false)
+      return
+    }
+
+    setAfiliados((prev) => prev.map((a) => (a.id === editandoId ? (actualizado as any) : a)))
+    setGuardandoEdicion(false)
+    setEditandoId(null)
+    setDraft(null)
+  }
+
   const thBase = "text-left px-3 py-2 font-semibold whitespace-nowrap cursor-pointer select-none hover:bg-gray-100"
   const inputFiltro = "w-full text-xs border rounded px-2 py-1"
   const inputFiltroStyle = { borderColor: 'var(--color-borde)' }
+  const inputEdicion = "w-full text-xs border rounded px-1.5 py-1"
+  const inputEdicionStyle = { borderColor: '#004466' }
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-fondo)' }}>
@@ -235,9 +350,19 @@ export default function AfiliadosPage() {
           <p className="text-sm font-medium" style={{ color: 'var(--texto-secundario)' }}>
             {loading ? 'Cargando...' : `${afiliadosFiltrados.length} de ${total} afiliado${total !== 1 ? 's' : ''}`}
           </p>
-          <button onClick={limpiarFiltros} className="text-xs px-3 py-1.5 rounded-lg border font-medium" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
-            Limpiar filtros
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={limpiarFiltros} className="text-xs px-3 py-1.5 rounded-lg border font-medium" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+              Limpiar filtros
+            </button>
+            {perfil?.rol !== 'encargado' && perfil?.rol !== 'lider' && (
+              <button
+                onClick={() => { setModoEdicion((v) => !v); cancelarEdicion() }}
+                className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white"
+                style={{ background: modoEdicion ? '#9b1c3a' : '#004466' }}>
+                {modoEdicion ? 'Salir de edición' : 'Editar afiliados'}
+              </button>
+            )}
+          </div>
         </div>
 
         {loading ? (
@@ -262,12 +387,15 @@ export default function AfiliadosPage() {
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('rol')}>Rol<SortIcon field="rol" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('sector')}>Sector<SortIcon field="sector" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('ubicacion')}>Ubicación<SortIcon field="ubicacion" /></th>
-                  {perfil?.rol !== 'encargado' && (
+                  {perfil?.rol !== 'encargado' && perfil?.rol !== 'lider' && (
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('encargado')}>Encargado del sector<SortIcon field="encargado" /></th>
                   )}
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('afiliado_por')}>Afiliado por<SortIcon field="afiliado_por" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('vota')}>Vota en Pinula<SortIcon field="vota" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('fecha_registro')}>F. Registro<SortIcon field="fecha_registro" /></th>
+                  {modoEdicion && (
+                    <th className="text-left px-3 py-2 font-semibold whitespace-nowrap" style={{ color: 'var(--texto-secundario)' }}>Acciones</th>
+                  )}
                 </tr>
                 <tr style={{ background: 'white', borderBottom: '2px solid var(--color-borde)' }}>
                   <th className="px-3 py-1.5">
@@ -303,7 +431,7 @@ export default function AfiliadosPage() {
                   <th className="px-3 py-1.5">
                     <input type="text" value={filtros.ubicacion} onChange={(e) => handleFiltroChange('ubicacion', e.target.value)} placeholder="Filtrar..." className={inputFiltro} style={inputFiltroStyle} />
                   </th>
-                  {perfil?.rol !== 'encargado' && (
+                  {perfil?.rol !== 'encargado' && perfil?.rol !== 'lider' && (
                     <th className="px-3 py-1.5">
                       <input type="text" value={filtros.encargado} onChange={(e) => handleFiltroChange('encargado', e.target.value)} placeholder="Filtrar..." className={inputFiltro} style={inputFiltroStyle} />
                     </th>
@@ -321,12 +449,13 @@ export default function AfiliadosPage() {
                   <th className="px-3 py-1.5">
                     <input type="text" value={filtros.fecha_registro} onChange={(e) => handleFiltroChange('fecha_registro', e.target.value)} placeholder="dd/mm/aaaa" className={inputFiltro} style={inputFiltroStyle} />
                   </th>
+                  {modoEdicion && <th className="px-3 py-1.5"></th>}
                 </tr>
               </thead>
               <tbody>
                 {afiliadosFiltrados.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>
+                    <td colSpan={13} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>
                       Ningun afiliado coincide con los filtros aplicados.
                     </td>
                   </tr>
@@ -335,6 +464,75 @@ export default function AfiliadosPage() {
                     const rol = (a as any).rol_afiliado || 'Simpatizante'
                     const estiloRol = colorRol[rol] || colorRol['Simpatizante']
                     const encargadoSector = ((a as any).sectores)?.encargado_nombre
+                    const enEdicion = modoEdicion && editandoId === a.id && draft
+
+                    if (enEdicion) {
+                      return (
+                        <tr key={a.id} style={{ background: '#fff7ed' }}>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-col gap-1">
+                              <input className={inputEdicion} style={inputEdicionStyle} value={draft.primer_apellido} onChange={(e) => setDraft({ ...draft, primer_apellido: e.target.value })} placeholder="Primer apellido" />
+                              <input className={inputEdicion} style={inputEdicionStyle} value={draft.segundo_apellido} onChange={(e) => setDraft({ ...draft, segundo_apellido: e.target.value })} placeholder="Segundo apellido" />
+                              <input className={inputEdicion} style={inputEdicionStyle} value={draft.primer_nombre} onChange={(e) => setDraft({ ...draft, primer_nombre: e.target.value })} placeholder="Primer nombre" />
+                              <input className={inputEdicion} style={inputEdicionStyle} value={draft.segundo_nombre} onChange={(e) => setDraft({ ...draft, segundo_nombre: e.target.value })} placeholder="Segundo nombre" />
+                            </div>
+                          </td>
+                          <td className="px-3 py-2">
+                            <input className={inputEdicion} style={inputEdicionStyle} value={draft.dpi} onChange={(e) => setDraft({ ...draft, dpi: e.target.value })} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input className={inputEdicion} style={inputEdicionStyle} value={draft.telefono} onChange={(e) => setDraft({ ...draft, telefono: e.target.value })} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="date" className={inputEdicion} style={inputEdicionStyle} value={draft.fecha_nacimiento} onChange={(e) => setDraft({ ...draft, fecha_nacimiento: e.target.value })} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input className={inputEdicion} style={inputEdicionStyle} value={draft.genero} onChange={(e) => setDraft({ ...draft, genero: e.target.value })} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <select className={inputEdicion} style={inputEdicionStyle} value={draft.rol_afiliado} onChange={(e) => setDraft({ ...draft, rol_afiliado: e.target.value })}>
+                              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <select className={inputEdicion} style={inputEdicionStyle} value={draft.sector_id} onChange={(e) => setDraft({ ...draft, sector_id: e.target.value })}>
+                              <option value="">Sin sector</option>
+                              {sectoresList.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <input className={inputEdicion} style={inputEdicionStyle} value={draft.nombre_ubicacion} onChange={(e) => setDraft({ ...draft, nombre_ubicacion: e.target.value })} />
+                          </td>
+                          {perfil?.rol !== 'encargado' && perfil?.rol !== 'lider' && (
+                            <td className="px-3 py-2 text-xs" style={{ color: 'var(--texto-secundario)' }}>{encargadoSector || '—'}</td>
+                          )}
+                          <td className="px-3 py-2">
+                            <input className={inputEdicion} style={inputEdicionStyle} value={draft.afiliado_por} onChange={(e) => setDraft({ ...draft, afiliado_por: e.target.value })} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <select className={inputEdicion} style={inputEdicionStyle} value={draft.vota_en_pinula ? 'si' : 'no'} onChange={(e) => setDraft({ ...draft, vota_en_pinula: e.target.value === 'si' })}>
+                              <option value="si">Sí</option>
+                              <option value="no">No</option>
+                            </select>
+                          </td>
+                          <td className="px-3 py-2 text-xs" style={{ color: 'var(--texto-secundario)' }}>{formatFecha(a.created_at as any) || '—'}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-col gap-1.5">
+                              <button onClick={guardarEdicion} disabled={guardandoEdicion} className="text-xs px-2 py-1 rounded-lg font-semibold text-white disabled:opacity-50" style={{ background: '#166534' }}>
+                                {guardandoEdicion ? 'Guardando...' : 'Guardar'}
+                              </button>
+                              <button onClick={cancelarEdicion} className="text-xs px-2 py-1 rounded-lg border font-medium" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                                Cancelar
+                              </button>
+                              {errorEdicion && (
+                                <p className="text-xs text-red-600 mt-1">{errorEdicion}</p>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    }
+
                     return (
                       <tr
                         key={a.id}
@@ -357,11 +555,11 @@ export default function AfiliadosPage() {
                             {rol}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 whitespace-nowrap">{(a as any).sectores?.nombre || "—"}</td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">{(a as any).sectores?.nombre || '—'}</td>
                         <td className="px-3 py-2.5 whitespace-nowrap">
                           {a.tipo_ubicacion && a.nombre_ubicacion ? `${a.nombre_ubicacion}` : '—'}
                         </td>
-                        {perfil?.rol !== 'encargado' && (
+                        {perfil?.rol !== 'encargado' && perfil?.rol !== 'lider' && (
                           <td className="px-3 py-2.5 whitespace-nowrap">{encargadoSector || '—'}</td>
                         )}
                         <td className="px-3 py-2.5 whitespace-nowrap">{(a as any).afiliado_por || '—'}</td>
@@ -373,6 +571,13 @@ export default function AfiliadosPage() {
                           </span>
                         </td>
                         <td className="px-3 py-2.5 whitespace-nowrap">{formatFecha(a.created_at as any) || '—'}</td>
+                        {modoEdicion && (
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <button onClick={() => iniciarEdicion(a)} className="text-xs px-2.5 py-1 rounded-lg font-semibold text-white" style={{ background: '#004466' }}>
+                              Editar
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     )
                   })
