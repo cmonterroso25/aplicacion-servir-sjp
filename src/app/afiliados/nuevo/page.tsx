@@ -63,9 +63,21 @@ function NuevoAfiliadoForm() {
       if (primerApellidoParam)   setPrimerApellido(primerApellidoParam)
       if (segundoApellidoParam)  setSegundoApellido(segundoApellidoParam)
 
-      if (dpiParam) {
+      // Solo consideramos que el registro fue "encontrado" en el padron
+      // si ademas del DPI llegan datos de nombre/apellido (vienen desde
+      // la pantalla de consulta cuando SI hubo coincidencia).
+      const vieneDeRegistroEncontrado = Boolean(dpiParam && (primerNombreParam || primerApellidoParam))
+
+      if (vieneDeRegistroEncontrado) {
         setVotaPinula(true)
         setMensajeDpi('Si vota en San Jose Pinula — datos autocompletados')
+      } else if (dpiParam) {
+        // Llego un DPI pero sin coincidencia en el padron (afiliacion directa)
+        setVotaPinula(false)
+        setMensajeDpi('')
+      } else {
+        setVotaPinula(null)
+        setMensajeDpi('')
       }
     }
     init()

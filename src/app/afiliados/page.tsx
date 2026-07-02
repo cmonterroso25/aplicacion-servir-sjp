@@ -15,6 +15,9 @@ const colorRol: Record<string, { bg: string; color: string }> = {
 
 const ROLES = ['Simpatizante', 'Organizador', 'Guerrero', 'Lider', 'Templario']
 
+// Roles que solo ven / filtran por sus propios afiliados
+const ROLES_SOLO_PROPIOS = ['colaborador', 'encargado', 'pentagono', 'templario']
+
 type SortField = 'nombre' | 'dpi' | 'telefono' | 'fecha_nacimiento' | 'genero' | 'rol' | 'sector' | 'ubicacion' | 'encargado' | 'afiliado_por' | 'vota' | 'fecha_registro'
 type SortDir = 'asc' | 'desc'
 
@@ -83,7 +86,7 @@ export default function AfiliadosPage() {
         .select('*, sectores(nombre, encargado_nombre), perfiles(nombre_completo, email)', { count: 'exact' })
         .order('primer_apellido')
         .limit(100)
-      if (rol === 'encargado') q = q.eq('encargado_id', userId)
+      if (ROLES_SOLO_PROPIOS.includes(rol)) q = q.eq('encargado_id', userId)
       if (termino.length >= 2) {
         q = q.or(`primer_apellido.ilike.%${termino}%,primer_nombre.ilike.%${termino}%,dpi.eq.${termino}`)
       }
@@ -313,7 +316,7 @@ export default function AfiliadosPage() {
             <div>
               <h1 className="font-bold text-sm" style={{ color: '#004466' }}>Afiliados</h1>
               <p className="text-xs" style={{ color: 'var(--texto-secundario)' }}>
-                {perfil?.rol === 'encargado' ? 'Mis afiliados' : 'Todos los afiliados'}
+                {ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') ? 'Mis afiliados' : 'Todos los afiliados'}
               </p>
             </div>
           </div>
@@ -355,7 +358,7 @@ export default function AfiliadosPage() {
             <button onClick={limpiarFiltros} className="text-xs px-3 py-1.5 rounded-lg border font-medium" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
               Limpiar filtros
             </button>
-            {perfil?.rol !== 'encargado' && perfil?.rol !== 'lider' && (
+            {!ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') && perfil?.rol !== 'lider' && (
               <button
                 onClick={() => { setModoEdicion((v) => !v); cancelarEdicion() }}
                 className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white"
@@ -388,7 +391,7 @@ export default function AfiliadosPage() {
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('rol')}>Rol<SortIcon field="rol" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('sector')}>Sector<SortIcon field="sector" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('ubicacion')}>Ubicación<SortIcon field="ubicacion" /></th>
-                  {perfil?.rol !== 'encargado' && perfil?.rol !== 'lider' && (
+                  {!ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') && perfil?.rol !== 'lider' && (
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('encargado')}>Encargado del sector<SortIcon field="encargado" /></th>
                   )}
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('afiliado_por')}>Afiliado por<SortIcon field="afiliado_por" /></th>
@@ -432,7 +435,7 @@ export default function AfiliadosPage() {
                   <th className="px-3 py-1.5">
                     <input type="text" value={filtros.ubicacion} onChange={(e) => handleFiltroChange('ubicacion', e.target.value)} placeholder="Filtrar..." className={inputFiltro} style={inputFiltroStyle} />
                   </th>
-                  {perfil?.rol !== 'encargado' && perfil?.rol !== 'lider' && (
+                  {!ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') && perfil?.rol !== 'lider' && (
                     <th className="px-3 py-1.5">
                       <input type="text" value={filtros.encargado} onChange={(e) => handleFiltroChange('encargado', e.target.value)} placeholder="Filtrar..." className={inputFiltro} style={inputFiltroStyle} />
                     </th>
@@ -504,7 +507,7 @@ export default function AfiliadosPage() {
                           <td className="px-3 py-2">
                             <input className={inputEdicion} style={inputEdicionStyle} value={draft.nombre_ubicacion} onChange={(e) => setDraft({ ...draft, nombre_ubicacion: e.target.value })} />
                           </td>
-                          {perfil?.rol !== 'encargado' && perfil?.rol !== 'lider' && (
+                          {!ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') && perfil?.rol !== 'lider' && (
                             <td className="px-3 py-2 text-xs" style={{ color: 'var(--texto-secundario)' }}>{encargadoSector || '—'}</td>
                           )}
                           <td className="px-3 py-2">
@@ -560,7 +563,7 @@ export default function AfiliadosPage() {
                         <td className="px-3 py-2.5 whitespace-nowrap">
                           {a.tipo_ubicacion && a.nombre_ubicacion ? `${a.nombre_ubicacion}` : '—'}
                         </td>
-                        {perfil?.rol !== 'encargado' && perfil?.rol !== 'lider' && (
+                        {!ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') && perfil?.rol !== 'lider' && (
                           <td className="px-3 py-2.5 whitespace-nowrap">{encargadoSector || '—'}</td>
                         )}
                         <td className="px-3 py-2.5 whitespace-nowrap">{(a as any).afiliado_por || '—'}</td>

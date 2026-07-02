@@ -28,10 +28,16 @@ export default function ConsultaPage() {
 
   const buscar = useCallback(async () => {
     const termino = query.trim()
-    if (!termino || termino.length < 2) {
+
+    if (!termino) {
       setError('Escribe el numero de DPI para buscar.')
       return
     }
+    if (!/^\d{13}$/.test(termino)) {
+      setError('El DPI debe tener 13 digitos. Verifica el numero e intenta de nuevo.')
+      return
+    }
+
     setLoading(true)
     setError('')
     setBuscado(false)
@@ -66,6 +72,12 @@ export default function ConsultaPage() {
     if (e.key === 'Enter') buscar()
   }
 
+  const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const soloDigitos = e.target.value.replace(/\D/g, '').slice(0, 13)
+    setQuery(soloDigitos)
+    if (error) setError('')
+  }
+
   const limpiar = () => {
     setQuery('')
     setResultados([])
@@ -89,6 +101,11 @@ export default function ConsultaPage() {
     router.push(`/afiliados/nuevo?${params.toString()}`)
   }
 
+  const irAFiliarSinRegistro = () => {
+    const params = new URLSearchParams({ dpi: query.trim() })
+    router.push(`/afiliados/nuevo?${params.toString()}`)
+  }
+
   const BTN = { background: '#004466', color: '#ffffff' }
 
   return (
@@ -105,10 +122,11 @@ export default function ConsultaPage() {
               type="text"
               inputMode="numeric"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={handleQueryChange}
               onKeyDown={handleKeyDown}
               className="input-field flex-1"
-              placeholder="Numero de DPI..."
+              placeholder="Numero de DPI (13 digitos)..."
+              maxLength={13}
               autoFocus
             />
             {query && (
@@ -141,15 +159,26 @@ export default function ConsultaPage() {
           <div>
             {resultados.length === 0 ? (
               <div className="card text-center py-10">
-                <div className="w-14 h-14 mx-auto rounded-full flex items-center justify-center mb-3" style={{ background: '#fee2e2' }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <div className="w-14 h-14 mx-auto rounded-full flex items-center justify-center mb-3" style={{ background: '#e0f7fa' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7" style={{ color: '#004466' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
                   </svg>
                 </div>
-                <p className="font-semibold text-red-700 text-lg">No vota en San Jose Pinula</p>
-                <p className="text-sm mt-1" style={{ color: 'var(--texto-secundario)' }}>
-                  No se encontro ningun registro con ese DPI.
+                <p className="font-semibold text-lg" style={{ color: '#004466' }}>
+                  Gracias por querer formar parte de la familia Servir San Jose Pinula
                 </p>
+                <p className="text-sm mt-1 mb-5" style={{ color: 'var(--texto-secundario)' }}>
+                  No encontramos ese DPI en el padron, pero puedes afiliarte de igual manera.
+                </p>
+                <button
+                  onClick={irAFiliarSinRegistro}
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-full transition-colors"
+                  style={{ background: '#004466', color: 'white' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Afiliar ahora
+                </button>
               </div>
             ) : (
               <div className="space-y-3">

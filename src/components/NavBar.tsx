@@ -18,8 +18,8 @@ export default function NavBar({ rol }: Props) {
 
   const tabsCompletos = [
     {
-      label: 'Empadronados', href: '/consulta', icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      label: 'Consultar DPI', href: '/consulta', icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill= "none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
       )
@@ -59,17 +59,27 @@ export default function NavBar({ rol }: Props) {
         </svg>
       )
     },
+    {
+      label: 'Seguimientos', href: '/seguimientos', icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v14a2 2 0 002 2h4m0-18h10a2 2 0 012 2v14a2 2 0 01-2 2H9m0-18v18m4-13v4m4-7v10" />
+        </svg>
+      )
+    },
   ]
 
-  // El rol "lider" solo tiene acceso a Empadronados
-  // El rol "encargado" solo tiene acceso a Empadronados y Afiliados
-  const tabs = !rol
-    ? []
-    : rol === 'lider'
-    ? tabsCompletos.filter((t) => t.href === '/consulta')
-    : rol === 'encargado'
-    ? tabsCompletos.filter((t) => ['/consulta', '/afiliados'].includes(t.href))
-    : tabsCompletos
+  // Matriz de permisos por rol
+  const permisosPorRol: Record<string, string[]> = {
+    admin:       ['/consulta', '/afiliados', '/estadisticas', '/reportes', '/templarios', '/calendario', '/seguimientos'],
+    colaborador: ['/consulta', '/afiliados'],
+    encargado:   ['/consulta', '/afiliados', '/calendario', '/seguimientos'],
+    lider:       ['/consulta'],
+    pentagono:   ['/consulta', '/afiliados', '/templarios', '/calendario', '/seguimientos'],
+    templario:   ['/consulta', '/afiliados'],
+  }
+
+  const permitidos = permisosPorRol[rol || ''] || ['/consulta']
+  const tabs = tabsCompletos.filter((t) => permitidos.includes(t.href))
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
 
@@ -109,7 +119,6 @@ export default function NavBar({ rol }: Props) {
           </div>
         </div>
 
-        {/* Tabs — scroll horizontal en móvil */}
         <div className="flex gap-1 pb-0 overflow-x-auto scrollbar-hide">
           {tabs.map((tab) => (
             <button

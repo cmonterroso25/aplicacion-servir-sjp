@@ -37,8 +37,8 @@ export default function CalendarioPage() {
   const [mesActual, setMesActual] = useState(new Date())
   const [diaSeleccionado, setDiaSeleccionado] = useState<string | null>(null)
 
-  // ✅ CORREGIDO: colaborador en lugar de encargado
-  const puedeAgendar = perfil?.rol === 'admin' || perfil?.rol === 'colaborador'
+  // ✅ Solo Admin y Pentagono pueden agendar/editar/eliminar reuniones
+  const puedeAgendar = perfil?.rol === 'admin' || perfil?.rol === 'pentagono'
 
   useEffect(() => {
     const init = async () => {
@@ -46,7 +46,9 @@ export default function CalendarioPage() {
       if (!session) { router.replace('/login'); return }
       const { data: p } = await supabase.from('perfiles').select('*').eq('id', session.user.id).single()
       if (p) {
-        if (p.rol === 'lider') { router.replace('/afiliados'); return }
+        // ✅ Solo admin y pentagono pueden acceder al calendario;
+        // el resto de roles (lider, templario) se redirige a /afiliados
+        if (p.rol !== 'admin' && p.rol !== 'pentagono') { router.replace('/afiliados'); return }
         setPerfil(p)
       }
       await cargarReuniones()

@@ -38,7 +38,7 @@ export default function TemplariosPage() {
       if (!session) { router.replace('/login'); return }
       const { data: p } = await supabase.from('perfiles').select('*').eq('id', session.user.id).single()
       if (p) {
-        if (p.rol === 'lider') { router.replace('/afiliados'); return }
+        if (p.rol === 'lider') { router.replace('/consulta'); return }
         setPerfil(p)
       }
       await cargarStats()
