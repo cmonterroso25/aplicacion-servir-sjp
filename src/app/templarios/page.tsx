@@ -38,10 +38,10 @@ export default function TemplariosPage() {
       if (!session) { router.replace('/login'); return }
       const { data: p } = await supabase.from('perfiles').select('*').eq('id', session.user.id).single()
       if (p) {
-        if (p.rol === 'lider') { router.replace('/consulta'); return }
+        if (p.rol !== 'admin' && p.rol !== 'pentagono') { router.replace('/afiliados'); return }
         setPerfil(p)
+        await cargarStats()
       }
-      await cargarStats()
     }
     init()
   }, [router])
@@ -49,22 +49,34 @@ export default function TemplariosPage() {
   const cargarStats = async () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('afiliados')
-        .select(`
-          afiliado_por,
-          rol_afiliado,
-          sectores ( nombre )
-        `)
-        .not('afiliado_por', 'is', null)
+      // Traer TODAS las filas paginando de 1000 en 1000
+      // (Supabase/PostgREST limita cada respuesta a 1000 filas por defecto,
+      // incluso cuando se usa una funcion RPC que devuelve muchas filas)
+      let allRows: any[] = []
+      let from = 0
+      const pageSize = 1000
+      let hasMore = true
 
-      if (error) throw error
+      while (hasMore) {
+        const { data: page, error } = await supabase
+          .rpc('obtener_stats_templarios')
+          .range(from, from + pageSize - 1)
+
+        if (error) throw error
+        if (!page || page.length === 0) { hasMore = false; break }
+
+        allRows = allRows.concat(page)
+        if (page.length < pageSize) hasMore = false
+        from += pageSize
+      }
+
+      const data = allRows
 
       const mapa: Record<string, AfiliadoPorStats> = {}
 
       for (const row of data || []) {
         const key = (row.afiliado_por as string) || 'Sin registrar'
-        const sectorNombre = (row.sectores as any)?.nombre || 'Sin sector'
+        const sectorNombre = row.sector_nombre || 'Sin sector'
         const rol = (row.rol_afiliado || '').toLowerCase()
 
         if (!mapa[key]) {

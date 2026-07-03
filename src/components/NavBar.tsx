@@ -18,7 +18,7 @@ export default function NavBar({ rol }: Props) {
 
   const tabsCompletos = [
     {
-      label: 'Consultar DPI', href: '/consulta', icon: (
+      label: 'Empadronados', href: '/consulta', icon: (
         <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill= "none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
@@ -62,24 +62,23 @@ export default function NavBar({ rol }: Props) {
     {
       label: 'Seguimientos', href: '/seguimientos', icon: (
         <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v14a2 2 0 002 2h4m0-18h10a2 2 0 012 2v14a2 2 0 01-2 2H9m0-18v18m4-13v4m4-7v10" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
         </svg>
       )
     },
   ]
 
-  // Matriz de permisos por rol
+  // Qué tabs ve cada rol, según la tabla de permisos vigente.
   const permisosPorRol: Record<string, string[]> = {
-    admin:       ['/consulta', '/afiliados', '/estadisticas', '/reportes', '/templarios', '/calendario', '/seguimientos'],
-    colaborador: ['/consulta', '/afiliados'],
-    encargado:   ['/consulta', '/afiliados', '/calendario', '/seguimientos'],
-    lider:       ['/consulta'],
-    pentagono:   ['/consulta', '/afiliados', '/templarios', '/calendario', '/seguimientos'],
-    templario:   ['/consulta', '/afiliados'],
+    admin: ['/consulta', '/afiliados', '/estadisticas', '/reportes', '/templarios', '/calendario', '/seguimientos'],
+    pentagono: ['/consulta', '/afiliados', '/templarios', '/calendario', '/seguimientos'],
+    templario: ['/consulta', '/afiliados'],
+    lider: ['/consulta'],
   }
 
-  const permitidos = permisosPorRol[rol || ''] || ['/consulta']
-  const tabs = tabsCompletos.filter((t) => permitidos.includes(t.href))
+  const tabs = rol
+    ? tabsCompletos.filter((t) => permisosPorRol[rol]?.includes(t.href))
+    : []
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
 
@@ -119,6 +118,7 @@ export default function NavBar({ rol }: Props) {
           </div>
         </div>
 
+        {/* Tabs — scroll horizontal en móvil */}
         <div className="flex gap-1 pb-0 overflow-x-auto scrollbar-hide">
           {tabs.map((tab) => (
             <button

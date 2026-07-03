@@ -43,15 +43,33 @@ export default function EstadisticasPage() {
   const cargarEstadisticas = async (rol: string, userId: string) => {
     setLoading(true)
     try {
-      let q = supabase
-        .from('afiliados')
-        .select('sector_id, vota_en_pinula, rol_afiliado, sectores(nombre, encargado_nombre), encargado_id')
+      // Traer TODAS las filas paginando de 1000 en 1000
+      // (Supabase/PostgREST limita cada respuesta a 1000 filas por defecto)
+      let allData: any[] = []
+      let from = 0
+      const pageSize = 1000
+      let hasMore = true
 
-      if (rol === 'encargado') {
-        q = q.eq('encargado_id', userId)
+      while (hasMore) {
+        let q = supabase
+          .from('afiliados')
+          .select('sector_id, vota_en_pinula, rol_afiliado, sectores(nombre, encargado_nombre), encargado_id')
+          .range(from, from + pageSize - 1)
+
+        if (rol === 'encargado') {
+          q = q.eq('encargado_id', userId)
+        }
+
+        const { data: pageData, error } = await q
+        if (error) throw error
+        if (!pageData || pageData.length === 0) { hasMore = false; break }
+
+        allData = allData.concat(pageData)
+        if (pageData.length < pageSize) hasMore = false
+        from += pageSize
       }
 
-      const { data } = await q
+      const data = allData
 
       if (!data) return
 
