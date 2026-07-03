@@ -18,7 +18,12 @@ const ROLES = ['Simpatizante', 'Organizador', 'Guerrero', 'Lider', 'Templario']
 // Roles que solo ven / filtran por sus propios afiliados
 const ROLES_SOLO_PROPIOS = ['colaborador', 'encargado', 'pentagono', 'templario']
 
-type SortField = 'nombre' | 'dpi' | 'telefono' | 'fecha_nacimiento' | 'genero' | 'rol' | 'sector' | 'ubicacion' | 'encargado' | 'afiliado_por' | 'vota' | 'fecha_registro'
+// Roles que NO pueden editar afiliados (ni siquiera los propios)
+const ROLES_SIN_EDICION = ['colaborador', 'encargado', 'lider']
+
+const PAGE_SIZE = 100
+
+type SortField = 'nombre' | 'dpi' | 'telefono' | 'fecha_nacimiento' | 'edad' | 'genero' | 'rol' | 'sector' | 'ubicacion' | 'encargado' | 'afiliado_por' | 'vota' | 'fecha_registro'
 type SortDir = 'asc' | 'desc'
 
 type Draft = {
@@ -37,6 +42,18 @@ type Draft = {
   vota_en_pinula: boolean
 }
 
+function generarPaginas(actual: number, total: number): (number | string)[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const paginas: (number | string)[] = [1]
+  if (actual > 3) paginas.push('...')
+  const inicio = Math.max(2, actual - 1)
+  const fin = Math.min(total - 1, actual + 1)
+  for (let i = inicio; i <= fin; i++) paginas.push(i)
+  if (actual < total - 2) paginas.push('...')
+  paginas.push(total)
+  return paginas
+}
+
 export default function AfiliadosPage() {
   const router = useRouter()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
@@ -45,12 +62,13 @@ export default function AfiliadosPage() {
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
 
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
   const [filtros, setFiltros] = useState({
-    nombre: '', dpi: '', telefono: '', fecha_nacimiento: '',
+    nombre: '', dpi: '', telefono: '', fecha_nacimiento: '', edad: '',
     genero: '', rol: '', sector: '', ubicacion: '',
     encargado: '', afiliado_por: '', vota: '', fecha_registro: '',
   })
@@ -73,19 +91,21 @@ export default function AfiliadosPage() {
       const { data: sData } = await supabase.from('sectores').select('*').order('nombre')
       setSectoresList(sData || [])
 
-      await cargarAfiliados(p?.rol || 'encargado', session.user.id, '')
+      await cargarAfiliados(p?.rol || 'encargado', session.user.id, '', 1)
     }
     init()
   }, [router])
 
-  const cargarAfiliados = useCallback(async (rol: string, userId: string, termino: string) => {
+  const cargarAfiliados = useCallback(async (rol: string, userId: string, termino: string, paginaActual: number) => {
     setLoading(true)
     try {
+      const desde = (paginaActual - 1) * PAGE_SIZE
+      const hasta = desde + PAGE_SIZE - 1
       let q = supabase
         .from('afiliados')
         .select('*, sectores(nombre, encargado_nombre), perfiles(nombre_completo, email)', { count: 'exact' })
         .order('primer_apellido')
-        .limit(100)
+        .range(desde, hasta)
       if (ROLES_SOLO_PROPIOS.includes(rol)) q = q.eq('encargado_id', userId)
       if (termino.length >= 2) {
         q = q.or(`primer_apellido.ilike.%${termino}%,primer_nombre.ilike.%${termino}%,dpi.eq.${termino}`)
@@ -99,7 +119,15 @@ export default function AfiliadosPage() {
   }, [])
 
   const handleBuscar = () => {
-    if (perfil) cargarAfiliados(perfil.rol, perfil.id, busqueda)
+    setPage(1)
+    if (perfil) cargarAfiliados(perfil.rol, perfil.id, busqueda, 1)
+  }
+
+  const irAPagina = (p: number) => {
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+    if (p < 1 || p > totalPages || p === page) return
+    setPage(p)
+    if (perfil) cargarAfiliados(perfil.rol, perfil.id, busqueda, p)
   }
 
   const formatNombre = (a: Afiliado) =>
@@ -121,7 +149,7 @@ export default function AfiliadosPage() {
 
   const limpiarFiltros = () => {
     setFiltros({
-      nombre: '', dpi: '', telefono: '', fecha_nacimiento: '',
+      nombre: '', dpi: '', telefono: '', fecha_nacimiento: '', edad: '',
       genero: '', rol: '', sector: '', ubicacion: '',
       encargado: '', afiliado_por: '', vota: '', fecha_registro: '',
     })
@@ -154,6 +182,7 @@ export default function AfiliadosPage() {
       case 'dpi': return (a.dpi || '').toLowerCase()
       case 'telefono': return (a.telefono || '').toLowerCase()
       case 'fecha_nacimiento': return a.fecha_nacimiento || ''
+      case 'edad': return String((a as any).edad ?? 0).padStart(3, '0')
       case 'genero': return (a.genero || '').toLowerCase()
       case 'rol': return ((a as any).rol_afiliado || 'Simpatizante').toLowerCase()
       case 'sector': return ((a as any).sectores?.nombre || '').toLowerCase()
@@ -173,12 +202,14 @@ export default function AfiliadosPage() {
       const ubicacion = a.nombre_ubicacion || ''
       const afiliadoPor = (a as any).afiliado_por || ''
       const fechaNac = formatFecha(a.fecha_nacimiento)
+      const edad = String((a as any).edad ?? '')
       const fechaReg = formatFecha(a.created_at as any)
 
       if (filtros.nombre && !formatNombre(a).toLowerCase().includes(filtros.nombre.toLowerCase())) return false
       if (filtros.dpi && !(a.dpi || '').toLowerCase().includes(filtros.dpi.toLowerCase())) return false
       if (filtros.telefono && !(a.telefono || '').toLowerCase().includes(filtros.telefono.toLowerCase())) return false
       if (filtros.fecha_nacimiento && !fechaNac.includes(filtros.fecha_nacimiento)) return false
+      if (filtros.edad && !edad.includes(filtros.edad)) return false
       if (filtros.genero && a.genero !== filtros.genero) return false
       if (filtros.rol && rol !== filtros.rol) return false
       if (filtros.sector && (a as any).sectores?.nombre !== filtros.sector) return false
@@ -302,6 +333,10 @@ export default function AfiliadosPage() {
   const inputEdicion = "w-full text-xs border rounded px-1.5 py-1"
   const inputEdicionStyle = { borderColor: '#004466' }
 
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const puedeEditar = !ROLES_SIN_EDICION.includes(perfil?.rol || '')
+  const muestraColumnaEncargado = !ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') && perfil?.rol !== 'lider'
+
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-fondo)' }}>
       <NavBar rol={perfil?.rol || ''} />
@@ -340,7 +375,7 @@ export default function AfiliadosPage() {
               placeholder="Buscar por nombre, apellido o DPI (servidor)..."
             />
             {busqueda && (
-              <button onClick={() => { setBusqueda(''); if (perfil) cargarAfiliados(perfil.rol, perfil.id, '') }} className="px-3 rounded-lg border text-sm" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+              <button onClick={() => { setBusqueda(''); setPage(1); if (perfil) cargarAfiliados(perfil.rol, perfil.id, '', 1) }} className="px-3 rounded-lg border text-sm" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
                 X
               </button>
             )}
@@ -350,15 +385,15 @@ export default function AfiliadosPage() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <p className="text-sm font-medium" style={{ color: 'var(--texto-secundario)' }}>
-            {loading ? 'Cargando...' : `${afiliadosFiltrados.length} de ${total} afiliado${total !== 1 ? 's' : ''}`}
+            {loading ? 'Cargando...' : `${afiliadosFiltrados.length} de ${total} afiliado${total !== 1 ? 's' : ''} · Página ${page} de ${totalPages}`}
           </p>
           <div className="flex items-center gap-2">
             <button onClick={limpiarFiltros} className="text-xs px-3 py-1.5 rounded-lg border font-medium" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
               Limpiar filtros
             </button>
-            {!ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') && perfil?.rol !== 'lider' && (
+            {puedeEditar && (
               <button
                 onClick={() => { setModoEdicion((v) => !v); cancelarEdicion() }}
                 className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white"
@@ -387,17 +422,18 @@ export default function AfiliadosPage() {
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('dpi')}>DPI<SortIcon field="dpi" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('telefono')}>Teléfono<SortIcon field="telefono" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('fecha_nacimiento')}>F. Nacimiento<SortIcon field="fecha_nacimiento" /></th>
+                  <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('edad')}>Edad<SortIcon field="edad" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('genero')}>Género<SortIcon field="genero" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('rol')}>Rol<SortIcon field="rol" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('sector')}>Sector<SortIcon field="sector" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('ubicacion')}>Ubicación<SortIcon field="ubicacion" /></th>
-                  {!ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') && perfil?.rol !== 'lider' && (
+                  {muestraColumnaEncargado && (
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('encargado')}>Encargado del sector<SortIcon field="encargado" /></th>
                   )}
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('afiliado_por')}>Afiliado por<SortIcon field="afiliado_por" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('vota')}>Vota en Pinula<SortIcon field="vota" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('fecha_registro')}>F. Registro<SortIcon field="fecha_registro" /></th>
-                  {modoEdicion && (
+                  {modoEdicion && puedeEditar && (
                     <th className="text-left px-3 py-2 font-semibold whitespace-nowrap" style={{ color: 'var(--texto-secundario)' }}>Acciones</th>
                   )}
                 </tr>
@@ -413,6 +449,9 @@ export default function AfiliadosPage() {
                   </th>
                   <th className="px-3 py-1.5">
                     <input type="text" value={filtros.fecha_nacimiento} onChange={(e) => handleFiltroChange('fecha_nacimiento', e.target.value)} placeholder="dd/mm/aaaa" className={inputFiltro} style={inputFiltroStyle} />
+                  </th>
+                  <th className="px-3 py-1.5">
+                    <input type="text" value={filtros.edad} onChange={(e) => handleFiltroChange('edad', e.target.value)} placeholder="Filtrar..." className={inputFiltro} style={inputFiltroStyle} />
                   </th>
                   <th className="px-3 py-1.5">
                     <select value={filtros.genero} onChange={(e) => handleFiltroChange('genero', e.target.value)} className={inputFiltro} style={inputFiltroStyle}>
@@ -435,7 +474,7 @@ export default function AfiliadosPage() {
                   <th className="px-3 py-1.5">
                     <input type="text" value={filtros.ubicacion} onChange={(e) => handleFiltroChange('ubicacion', e.target.value)} placeholder="Filtrar..." className={inputFiltro} style={inputFiltroStyle} />
                   </th>
-                  {!ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') && perfil?.rol !== 'lider' && (
+                  {muestraColumnaEncargado && (
                     <th className="px-3 py-1.5">
                       <input type="text" value={filtros.encargado} onChange={(e) => handleFiltroChange('encargado', e.target.value)} placeholder="Filtrar..." className={inputFiltro} style={inputFiltroStyle} />
                     </th>
@@ -453,13 +492,13 @@ export default function AfiliadosPage() {
                   <th className="px-3 py-1.5">
                     <input type="text" value={filtros.fecha_registro} onChange={(e) => handleFiltroChange('fecha_registro', e.target.value)} placeholder="dd/mm/aaaa" className={inputFiltro} style={inputFiltroStyle} />
                   </th>
-                  {modoEdicion && <th className="px-3 py-1.5"></th>}
+                  {modoEdicion && puedeEditar && <th className="px-3 py-1.5"></th>}
                 </tr>
               </thead>
               <tbody>
                 {afiliadosFiltrados.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>
+                    <td colSpan={14} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>
                       Ningun afiliado coincide con los filtros aplicados.
                     </td>
                   </tr>
@@ -468,7 +507,7 @@ export default function AfiliadosPage() {
                     const rol = (a as any).rol_afiliado || 'Simpatizante'
                     const estiloRol = colorRol[rol] || colorRol['Simpatizante']
                     const encargadoSector = ((a as any).sectores)?.encargado_nombre
-                    const enEdicion = modoEdicion && editandoId === a.id && draft
+                    const enEdicion = modoEdicion && puedeEditar && editandoId === a.id && draft
 
                     if (enEdicion) {
                       return (
@@ -490,6 +529,7 @@ export default function AfiliadosPage() {
                           <td className="px-3 py-2">
                             <input type="date" className={inputEdicion} style={inputEdicionStyle} value={draft.fecha_nacimiento} onChange={(e) => setDraft({ ...draft, fecha_nacimiento: e.target.value })} />
                           </td>
+                          <td className="px-3 py-2 text-xs" style={{ color: 'var(--texto-secundario)' }}>{(a as any).edad ?? '—'}</td>
                           <td className="px-3 py-2">
                             <input className={inputEdicion} style={inputEdicionStyle} value={draft.genero} onChange={(e) => setDraft({ ...draft, genero: e.target.value })} />
                           </td>
@@ -507,7 +547,7 @@ export default function AfiliadosPage() {
                           <td className="px-3 py-2">
                             <input className={inputEdicion} style={inputEdicionStyle} value={draft.nombre_ubicacion} onChange={(e) => setDraft({ ...draft, nombre_ubicacion: e.target.value })} />
                           </td>
-                          {!ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') && perfil?.rol !== 'lider' && (
+                          {muestraColumnaEncargado && (
                             <td className="px-3 py-2 text-xs" style={{ color: 'var(--texto-secundario)' }}>{encargadoSector || '—'}</td>
                           )}
                           <td className="px-3 py-2">
@@ -553,6 +593,7 @@ export default function AfiliadosPage() {
                         <td className="px-3 py-2.5 font-mono whitespace-nowrap">{a.dpi || '—'}</td>
                         <td className="px-3 py-2.5 whitespace-nowrap">{a.telefono || '—'}</td>
                         <td className="px-3 py-2.5 whitespace-nowrap">{formatFecha(a.fecha_nacimiento) || '—'}</td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">{(a as any).edad ?? '—'}</td>
                         <td className="px-3 py-2.5 whitespace-nowrap">{a.genero || '—'}</td>
                         <td className="px-3 py-2.5 whitespace-nowrap">
                           <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: estiloRol.bg, color: estiloRol.color }}>
@@ -563,7 +604,7 @@ export default function AfiliadosPage() {
                         <td className="px-3 py-2.5 whitespace-nowrap">
                           {a.tipo_ubicacion && a.nombre_ubicacion ? `${a.nombre_ubicacion}` : '—'}
                         </td>
-                        {!ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') && perfil?.rol !== 'lider' && (
+                        {muestraColumnaEncargado && (
                           <td className="px-3 py-2.5 whitespace-nowrap">{encargadoSector || '—'}</td>
                         )}
                         <td className="px-3 py-2.5 whitespace-nowrap">{(a as any).afiliado_por || '—'}</td>
@@ -575,7 +616,7 @@ export default function AfiliadosPage() {
                           </span>
                         </td>
                         <td className="px-3 py-2.5 whitespace-nowrap">{formatFecha(a.created_at as any) || '—'}</td>
-                        {modoEdicion && (
+                        {modoEdicion && puedeEditar && (
                           <td className="px-3 py-2.5 whitespace-nowrap">
                             <button onClick={() => iniciarEdicion(a)} className="text-xs px-2.5 py-1 rounded-lg font-semibold text-white" style={{ background: '#004466' }}>
                               Editar
@@ -588,6 +629,38 @@ export default function AfiliadosPage() {
                 )}
               </tbody>
             </table>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-1.5 py-4 border-t flex-wrap" style={{ borderColor: 'var(--color-borde)' }}>
+                <button
+                  onClick={() => irAPagina(page - 1)}
+                  disabled={page <= 1}
+                  className="px-2.5 py-1.5 rounded-lg border text-sm font-medium disabled:opacity-40"
+                  style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                  ←
+                </button>
+                {generarPaginas(page, totalPages).map((p, i) =>
+                  p === '...' ? (
+                    <span key={`dots-${i}`} className="px-2 text-sm" style={{ color: 'var(--texto-secundario)' }}>…</span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => irAPagina(p as number)}
+                      className="px-3 py-1.5 rounded-lg text-sm font-semibold"
+                      style={p === page ? { background: '#004466', color: 'white' } : { border: '1px solid var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                      {p}
+                    </button>
+                  )
+                )}
+                <button
+                  onClick={() => irAPagina(page + 1)}
+                  disabled={page >= totalPages}
+                  className="px-2.5 py-1.5 rounded-lg border text-sm font-medium disabled:opacity-40"
+                  style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                  →
+                </button>
+              </div>
+            )}
           </div>
         )}
       </main>
