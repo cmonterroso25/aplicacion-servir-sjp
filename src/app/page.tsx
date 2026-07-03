@@ -7,6 +7,8 @@ import NavBar from '@/components/NavBar'
 
 const FECHA_ELECCIONES = new Date('2027-06-27T00:00:00')
 
+const NOMBRES_FEMENINOS = ['Angelica Ramirez', 'Tatiana Rivera', 'Yanira Ramirez']
+
 function calcularTiempoRestante() {
   const ahora = new Date().getTime()
   const diferencia = FECHA_ELECCIONES.getTime() - ahora
@@ -60,6 +62,10 @@ export default function InicioPage() {
   )
 
   const nombreUsuario = perfil?.nombre_completo || perfil?.email || ''
+  const esFemenino = NOMBRES_FEMENINOS.some(
+    (n) => n.toLowerCase() === nombreUsuario.trim().toLowerCase()
+  )
+  const saludo = esFemenino ? 'Bienvenida' : 'Bienvenido'
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-fondo)' }}>
@@ -75,7 +81,7 @@ export default function InicioPage() {
 
           <h1 className="font-bold text-xl sm:text-2xl mb-2" style={{ color: '#004466' }}>
             {nombreUsuario
-              ? `Bienvenido, ${nombreUsuario}`
+              ? `${saludo}, ${nombreUsuario}`
               : 'Bienvenido a la aplicacion de Servir San Jose Pinula'}
           </h1>
           <p className="text-sm sm:text-base mb-1" style={{ color: 'var(--texto-secundario)' }}>
