@@ -114,6 +114,14 @@ function NuevoAfiliadoForm() {
       setError('Nombre y apellido son obligatorios.')
       return
     }
+    if (!afiliadoPor) {
+      setError('Debes seleccionar quien afilia (Afiliado por).')
+      return
+    }
+    if (!sectorId) {
+      setError('Debes seleccionar un sector.')
+      return
+    }
     if (!perfil) return
     setLoading(true)
     setError('')
@@ -261,8 +269,8 @@ function NuevoAfiliadoForm() {
                 <input type="date" value={fechaNacimiento} onChange={(e) => setFechaNacimiento(e.target.value)} className="input-field" />
               </div>
               <div className="col-span-2">
-                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--texto-secundario)' }}>Afiliado por</label>
-                <select value={afiliadoPor} onChange={(e) => setAfiliadoPor(e.target.value)} className="input-field">
+                <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--texto-secundario)' }}>Afiliado por *</label>
+                <select value={afiliadoPor} onChange={(e) => setAfiliadoPor(e.target.value)} className="input-field" required>
                     <option value="">Selecciona un encargado...</option>
                     {encargados.map((enc) => (
                       <option key={enc.encargado} value={enc.encargado}>{enc.encargado}</option>
@@ -293,8 +301,8 @@ function NuevoAfiliadoForm() {
           <div className="card space-y-3">
             <h2 className="font-semibold text-sm" style={{ color: 'var(--texto-principal)' }}>Sector y ubicacion</h2>
             <div>
-              <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--texto-secundario)' }}>Sector</label>
-              <select value={sectorId} onChange={(e) => setSectorId(e.target.value)} className="input-field">
+              <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--texto-secundario)' }}>Sector *</label>
+              <select value={sectorId} onChange={(e) => setSectorId(e.target.value)} className="input-field" required>
                 <option value="">Selecciona un sector...</option>
                 {sectores.map((s) => (
                   <option key={s.id} value={s.id}>{s.nombre}{s.encargado_nombre ? ` (${s.encargado_nombre})` : ""}</option>
