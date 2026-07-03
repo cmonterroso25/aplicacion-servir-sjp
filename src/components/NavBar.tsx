@@ -66,9 +66,16 @@ export default function NavBar({ rol }: Props) {
   const ROLES_SOLO_AFILIADOS = ['lider', 'colaborador']
   const ROLES_CONSULTA_Y_AFILIADOS = ['templario']
 
-  const tabs = ROLES_SOLO_AFILIADOS.includes(rol || '')
+  // Mientras el rol no se ha determinado (carga inicial de sesión/perfil),
+  // no mostramos ningun tab para evitar un "flash" con todas las opciones
+  // visibles antes de que se aplique la restriccion correcta.
+  const rolDefinido = !!rol
+
+  const tabs = !rolDefinido
+    ? []
+    : ROLES_SOLO_AFILIADOS.includes(rol)
     ? tabsCompletos.filter((t) => t.href === '/afiliados')
-    : ROLES_CONSULTA_Y_AFILIADOS.includes(rol || '')
+    : ROLES_CONSULTA_Y_AFILIADOS.includes(rol)
     ? tabsCompletos.filter((t) => t.href === '/consulta' || t.href === '/afiliados')
     : tabsCompletos
 
