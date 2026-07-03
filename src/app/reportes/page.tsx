@@ -29,6 +29,8 @@ const mapAfiliado = (a: any, sectoresMap: Record<number, string>) => ({
   'Fecha de registro': a.created_at ? new Date(a.created_at).toLocaleDateString('es-GT') : '',
 })
 
+const ROLES_SIN_ACCESO = ['lider', 'colaborador', 'templario']
+
 export default function ReportesPage() {
   const router = useRouter()
   const [rol, setRol] = useState<string>()
@@ -50,7 +52,7 @@ export default function ReportesPage() {
           .select('rol')
           .eq('id', user.id)
           .single()
-        if (perfil?.rol === 'lider') { router.replace('/afiliados'); return }
+        if (ROLES_SIN_ACCESO.includes(perfil?.rol || '')) { router.replace('/afiliados'); return }
         setRol(perfil?.rol)
       }
 

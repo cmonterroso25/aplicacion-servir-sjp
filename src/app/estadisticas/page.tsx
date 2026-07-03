@@ -18,6 +18,8 @@ type EstadisticaSector = {
   templario: number
 }
 
+const ROLES_SIN_ACCESO = ['lider', 'colaborador', 'templario']
+
 export default function EstadisticasPage() {
   const router = useRouter()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
@@ -32,7 +34,7 @@ export default function EstadisticasPage() {
       const { data: p } = await supabase
         .from('perfiles').select('*').eq('id', session.user.id).single()
       if (p) {
-        if (p.rol === 'lider') { router.replace('/afiliados'); return }
+        if (ROLES_SIN_ACCESO.includes(p.rol)) { router.replace('/afiliados'); return }
         setPerfil(p)
         await cargarEstadisticas(p.rol, session.user.id)
       }
