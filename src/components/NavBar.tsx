@@ -61,9 +61,15 @@ export default function NavBar({ rol }: Props) {
     },
   ]
 
-  // El rol "lider" solo tiene acceso a la pantalla de Afiliados
-    const tabs = rol === 'lider' || rol === 'colaborador'
+  // Roles con acceso restringido: lider y colaborador solo ven Afiliados;
+  // templario ve Consulta DPI y Afiliados
+  const ROLES_SOLO_AFILIADOS = ['lider', 'colaborador']
+  const ROLES_CONSULTA_Y_AFILIADOS = ['templario']
+
+  const tabs = ROLES_SOLO_AFILIADOS.includes(rol || '')
     ? tabsCompletos.filter((t) => t.href === '/afiliados')
+    : ROLES_CONSULTA_Y_AFILIADOS.includes(rol || '')
+    ? tabsCompletos.filter((t) => t.href === '/consulta' || t.href === '/afiliados')
     : tabsCompletos
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
