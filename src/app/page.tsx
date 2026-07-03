@@ -59,6 +59,8 @@ export default function InicioPage() {
     </div>
   )
 
+  const nombreUsuario = perfil?.nombre_completo || perfil?.email || ''
+
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-fondo)' }}>
       <NavBar rol={perfil?.rol || ''} />
@@ -72,7 +74,9 @@ export default function InicioPage() {
           </div>
 
           <h1 className="font-bold text-xl sm:text-2xl mb-2" style={{ color: '#004466' }}>
-            Bienvenido a la aplicacion de Servir San Jose Pinula
+            {nombreUsuario
+              ? `Bienvenido, ${nombreUsuario}`
+              : 'Bienvenido a la aplicacion de Servir San Jose Pinula'}
           </h1>
           <p className="text-sm sm:text-base mb-1" style={{ color: 'var(--texto-secundario)' }}>
             Te recuerdo que quedan
