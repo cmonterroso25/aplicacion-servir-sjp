@@ -7,6 +7,31 @@ import { TIPOS_UBICACION, OPCIONES_UBICACION, type TipoUbicacion } from '@/lib/u
 
 const ROLES_AFILIADO = ['Simpatizante', 'Organizador', 'Guerrero', 'Lider', 'Templario']
 
+const MESES = [
+  { valor: '01', nombre: 'Enero' },
+  { valor: '02', nombre: 'Febrero' },
+  { valor: '03', nombre: 'Marzo' },
+  { valor: '04', nombre: 'Abril' },
+  { valor: '05', nombre: 'Mayo' },
+  { valor: '06', nombre: 'Junio' },
+  { valor: '07', nombre: 'Julio' },
+  { valor: '08', nombre: 'Agosto' },
+  { valor: '09', nombre: 'Septiembre' },
+  { valor: '10', nombre: 'Octubre' },
+  { valor: '11', nombre: 'Noviembre' },
+  { valor: '12', nombre: 'Diciembre' },
+]
+
+function diasEnMes(mes: string, anio: string): number {
+  if (!mes) return 31
+  const m = parseInt(mes, 10)
+  const a = anio ? parseInt(anio, 10) : new Date().getFullYear()
+  return new Date(a, m, 0).getDate()
+}
+
+const ANIO_ACTUAL = new Date().getFullYear()
+const ANIOS = Array.from({ length: 100 }, (_, i) => String(ANIO_ACTUAL - i))
+
 function NuevoAfiliadoForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -26,13 +51,39 @@ function NuevoAfiliadoForm() {
   const [primerNombre, setPrimerNombre] = useState('')
   const [segundoNombre, setSegundoNombre] = useState('')
   const [telefono, setTelefono] = useState('')
+
+  const [diaNac, setDiaNac] = useState('')
+  const [mesNac, setMesNac] = useState('')
+  const [anioNac, setAnioNac] = useState('')
   const [fechaNacimiento, setFechaNacimiento] = useState('')
+
   const [sectorId, setSectorId] = useState('')
   const [tipoUbicacion, setTipoUbicacion] = useState<TipoUbicacion | ''>('')
   const [nombreUbicacion, setNombreUbicacion] = useState('')
   const [afiliadoPor, setAfiliadoPor] = useState('')
   const [rolAfiliado, setRolAfiliado] = useState('Simpatizante')
   const [encargados, setEncargados] = useState<{sector: string, encargado: string}[]>([])
+
+  useEffect(() => {
+    if (diaNac && mesNac && anioNac) {
+      setFechaNacimiento(`${anioNac}-${mesNac}-${diaNac}`)
+    } else {
+      setFechaNacimiento('')
+    }
+  }, [diaNac, mesNac, anioNac])
+
+  useEffect(() => {
+    if (diaNac) {
+      const maxDias = diasEnMes(mesNac, anioNac)
+      if (parseInt(diaNac, 10) > maxDias) {
+        setDiaNac(String(maxDias).padStart(2, '0'))
+      }
+    }
+  }, [mesNac, anioNac])
+
+  const diasDisponibles = Array.from({ length: diasEnMes(mesNac, anioNac) }, (_, i) =>
+    String(i + 1).padStart(2, '0')
+  )
 
   useEffect(() => {
     const init = async () => {
@@ -63,16 +114,12 @@ function NuevoAfiliadoForm() {
       if (primerApellidoParam)   setPrimerApellido(primerApellidoParam)
       if (segundoApellidoParam)  setSegundoApellido(segundoApellidoParam)
 
-      // Solo consideramos que el registro fue "encontrado" en el padron
-      // si ademas del DPI llegan datos de nombre/apellido (vienen desde
-      // la pantalla de consulta cuando SI hubo coincidencia).
       const vieneDeRegistroEncontrado = Boolean(dpiParam && (primerNombreParam || primerApellidoParam))
 
       if (vieneDeRegistroEncontrado) {
         setVotaPinula(true)
         setMensajeDpi('Si vota en San Jose Pinula — datos autocompletados')
       } else if (dpiParam) {
-        // Llego un DPI pero sin coincidencia en el padron (afiliacion directa)
         setVotaPinula(false)
         setMensajeDpi('')
       } else {
@@ -264,10 +311,46 @@ function NuevoAfiliadoForm() {
                 <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--texto-secundario)' }}>Telefono</label>
                 <input type="tel" inputMode="numeric" value={telefono} onChange={(e) => setTelefono(e.target.value)} className="input-field" placeholder="12345678" />
               </div>
+
               <div>
                 <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--texto-secundario)' }}>Fecha de nacimiento</label>
-                <input type="date" value={fechaNacimiento} onChange={(e) => setFechaNacimiento(e.target.value)} className="input-field" />
+                <div className="grid grid-cols-3 gap-2">
+                  <select
+                    value={diaNac}
+                    onChange={(e) => setDiaNac(e.target.value)}
+                    className="input-field"
+                    aria-label="Dia de nacimiento"
+                  >
+                    <option value="">Dia</option>
+                    {diasDisponibles.map((d) => (
+                      <option key={d} value={d}>{parseInt(d, 10)}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={mesNac}
+                    onChange={(e) => setMesNac(e.target.value)}
+                    className="input-field"
+                    aria-label="Mes de nacimiento"
+                  >
+                    <option value="">Mes</option>
+                    {MESES.map((m) => (
+                      <option key={m.valor} value={m.valor}>{m.nombre}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={anioNac}
+                    onChange={(e) => setAnioNac(e.target.value)}
+                    className="input-field"
+                    aria-label="Año de nacimiento"
+                  >
+                    <option value="">Año</option>
+                    {ANIOS.map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
+
               <div className="col-span-2">
                 <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--texto-secundario)' }}>Afiliado por *</label>
                 <select value={afiliadoPor} onChange={(e) => setAfiliadoPor(e.target.value)} className="input-field" required>
