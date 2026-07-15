@@ -26,6 +26,7 @@ export default function EstadisticasPage() {
   const [estadisticas, setEstadisticas] = useState<EstadisticaSector[]>([])
   const [totales, setTotales] = useState({ total: 0, vota: 0, no_vota: 0 })
   const [loading, setLoading] = useState(true)
+  const [errorCarga, setErrorCarga] = useState('')
 
   useEffect(() => {
     const init = async () => {
@@ -44,7 +45,35 @@ export default function EstadisticasPage() {
 
   const cargarEstadisticas = async (rol: string, userId: string) => {
     setLoading(true)
+    setErrorCarga('')
     try {
+      // Traer los encargados reales por sector desde sectores_encargados
+      // (un sector puede tener mas de un encargado).
+      // Si este query falla (ej. permisos), seguimos sin encargados en vez
+      // de tumbar toda la pagina.
+      const encargadosPorSector: Record<number, string[]> = {}
+      try {
+        const { data: encargadosData, error: encargadosError } = await supabase
+          .from('sectores_encargados')
+          .select('sector_id, encargado_nombre')
+
+        if (encargadosError) {
+          console.error('Error cargando sectores_encargados. message:', encargadosError.message)
+          console.error('Error cargando sectores_encargados. details:', encargadosError.details)
+          console.error('Error cargando sectores_encargados. hint:', encargadosError.hint)
+          console.error('Error cargando sectores_encargados. code:', encargadosError.code)
+        } else {
+          console.log('sectores_encargados OK, filas:', encargadosData?.length)
+          ;(encargadosData || []).forEach((row: any) => {
+            if (row.sector_id == null) return
+            if (!encargadosPorSector[row.sector_id]) encargadosPorSector[row.sector_id] = []
+            if (row.encargado_nombre) encargadosPorSector[row.sector_id].push(row.encargado_nombre)
+          })
+        }
+      } catch (e) {
+        console.error('Excepcion cargando sectores_encargados:', e)
+      }
+
       // Traer TODAS las filas paginando de 1000 en 1000
       // (Supabase/PostgREST limita cada respuesta a 1000 filas por defecto)
       let allData: any[] = []
@@ -55,7 +84,7 @@ export default function EstadisticasPage() {
       while (hasMore) {
         let q = supabase
           .from('afiliados')
-          .select('sector_id, vota_en_pinula, rol_afiliado, sectores(nombre, encargado_nombre), encargado_id')
+          .select('sector_id, vota_en_pinula, rol_afiliado, sectores(nombre), encargado_id')
           .range(from, from + pageSize - 1)
 
         if (rol === 'encargado') {
@@ -63,7 +92,10 @@ export default function EstadisticasPage() {
         }
 
         const { data: pageData, error } = await q
-        if (error) throw error
+        if (error) {
+          console.error('Error cargando afiliados:', error.message)
+          throw new Error(error.message || 'Error al cargar afiliados')
+        }
         if (!pageData || pageData.length === 0) { hasMore = false; break }
 
         allData = allData.concat(pageData)
@@ -80,7 +112,8 @@ export default function EstadisticasPage() {
 
       data.forEach((a: any) => {
         const sectorNombre = a.sectores?.nombre || 'Sin sector'
-        const encargado = a.sectores?.encargado_nombre || 'Sin encargado'
+        const nombresEncargados = a.sector_id != null ? (encargadosPorSector[a.sector_id] || []) : []
+        const encargado = nombresEncargados.length > 0 ? nombresEncargados.join(', ') : 'Sin encargado'
         const key = sectorNombre
 
         if (!mapa[key]) {
@@ -117,6 +150,9 @@ export default function EstadisticasPage() {
       const vota = data.filter((a: any) => a.vota_en_pinula).length
       setTotales({ total, vota, no_vota: total - vota })
 
+    } catch (e: any) {
+      console.error('Error cargando estadisticas:', e)
+      setErrorCarga(e?.message || 'Ocurrio un error al cargar las estadisticas')
     } finally {
       setLoading(false)
     }
@@ -154,6 +190,12 @@ export default function EstadisticasPage() {
             <p className="text-xs mt-1 font-medium" style={{ color: 'var(--texto-secundario)' }}>No votan aqui</p>
           </div>
         </div>
+
+        {errorCarga && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+            {errorCarga}
+          </div>
+        )}
 
         {loading ? (
           <div className="card text-center py-10">
