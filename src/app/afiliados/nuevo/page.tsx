@@ -60,6 +60,7 @@ function NuevoAfiliadoForm() {
   const [sectorId, setSectorId] = useState('')
   const [tipoUbicacion, setTipoUbicacion] = useState<TipoUbicacion | ''>('')
   const [nombreUbicacion, setNombreUbicacion] = useState('')
+  const [direccion, setDireccion] = useState('')
   const [afiliadoPor, setAfiliadoPor] = useState('')
   const [rolAfiliado, setRolAfiliado] = useState('Simpatizante')
   const [encargados, setEncargados] = useState<{sector: string, encargado: string}[]>([])
@@ -199,6 +200,7 @@ function NuevoAfiliadoForm() {
       encargado_id: perfil.id,
       tipo_ubicacion: tipoUbicacion || null,
       nombre_ubicacion: nombreUbicacion || null,
+      direccion: direccion || null,
       vota_en_pinula: votaPinula === null ? true : votaPinula,
       afiliado_por: afiliadoPor,
       rol_afiliado: rolAfiliado,
@@ -388,7 +390,7 @@ function NuevoAfiliadoForm() {
               <select value={sectorId} onChange={(e) => setSectorId(e.target.value)} className="input-field" required>
                 <option value="">Selecciona un sector...</option>
                 {sectores.map((s) => (
-                  <option key={s.id} value={s.id}>{s.nombre}{s.encargado_nombre ? ` (${s.encargado_nombre})` : ""}</option>
+                  <option key={s.id} value={s.id}>{s.nombre}</option>
                 ))}
               </select>
             </div>
@@ -432,6 +434,16 @@ function NuevoAfiliadoForm() {
                 )}
               </div>
             )}
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--texto-secundario)' }}>Casa/Lote/Manzana</label>
+              <input
+                type="text"
+                value={direccion}
+                onChange={(e) => setDireccion(e.target.value)}
+                className="input-field"
+                placeholder="Casa/Lote/Manzana"
+              />
+            </div>
           </div>
 
           {error && (
