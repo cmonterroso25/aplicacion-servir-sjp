@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, type Afiliado, type Perfil, type Sector } from '@/lib/supabase'
 import NavBar from '@/components/NavBar'
@@ -25,6 +25,28 @@ const PAGE_SIZE = 100
 
 type SortField = 'nombre' | 'dpi' | 'telefono' | 'fecha_nacimiento' | 'edad' | 'genero' | 'rol' | 'sector' | 'ubicacion' | 'encargado' | 'afiliado_por' | 'vota' | 'fecha_registro'
 type SortDir = 'asc' | 'desc'
+
+type FiltrosState = {
+  nombre: string
+  dpi: string
+  telefono: string
+  fecha_nacimiento: string
+  edad: string
+  genero: string
+  rol: string
+  sector: string
+  ubicacion: string
+  encargado: string
+  afiliado_por: string
+  vota: string
+  fecha_registro: string
+}
+
+const FILTROS_VACIOS: FiltrosState = {
+  nombre: '', dpi: '', telefono: '', fecha_nacimiento: '', edad: '',
+  genero: '', rol: '', sector: '', ubicacion: '',
+  encargado: '', afiliado_por: '', vota: '', fecha_registro: '',
+}
 
 type Draft = {
   primer_apellido: string
@@ -54,6 +76,22 @@ function generarPaginas(actual: number, total: number): (number | string)[] {
   return paginas
 }
 
+// Convierte "dd/mm/aaaa" (formato completo) a "aaaa-mm-dd" para filtrar en la BD.
+// Devuelve null si el texto no es una fecha completa y valida.
+function parseFechaInput(valor: string): string | null {
+  const m = valor.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (!m) return null
+  const [, d, mo, y] = m
+  const dd = d.padStart(2, '0')
+  const mm = mo.padStart(2, '0')
+  const iso = `${y}-${mm}-${dd}`
+  // Validar que sea una fecha real (ej. rechazar 31/02/2026)
+  const fecha = new Date(`${iso}T00:00:00Z`)
+  if (Number.isNaN(fecha.getTime())) return null
+  if (fecha.getUTCDate() !== parseInt(dd, 10)) return null
+  return iso
+}
+
 export default function AfiliadosPage() {
   const router = useRouter()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
@@ -67,11 +105,7 @@ export default function AfiliadosPage() {
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
-  const [filtros, setFiltros] = useState({
-    nombre: '', dpi: '', telefono: '', fecha_nacimiento: '', edad: '',
-    genero: '', rol: '', sector: '', ubicacion: '',
-    encargado: '', afiliado_por: '', vota: '', fecha_registro: '',
-  })
+  const [filtros, setFiltros] = useState<FiltrosState>(FILTROS_VACIOS)
 
   const [modoEdicion, setModoEdicion] = useState(false)
   const [editandoId, setEditandoId] = useState<number | null>(null)
@@ -91,43 +125,128 @@ export default function AfiliadosPage() {
       const { data: sData } = await supabase.from('sectores').select('*').order('nombre')
       setSectoresList(sData || [])
 
-      await cargarAfiliados(p?.rol || 'encargado', session.user.id, '', 1)
+      await cargarAfiliados(p?.rol || 'encargado', session.user.id, '', FILTROS_VACIOS, 1)
     }
     init()
   }, [router])
 
-  const cargarAfiliados = useCallback(async (rol: string, userId: string, termino: string, paginaActual: number) => {
+  // Construye y ejecuta la consulta a Supabase aplicando busqueda (DPI) y
+  // TODOS los filtros de columna contra la base de datos completa, no solo
+  // la pagina actual.
+  const cargarAfiliados = useCallback(async (
+    rol: string,
+    userId: string,
+    termino: string,
+    filtrosActuales: FiltrosState,
+    paginaActual: number
+  ) => {
     setLoading(true)
     try {
       const desde = (paginaActual - 1) * PAGE_SIZE
       const hasta = desde + PAGE_SIZE - 1
+
       let q = supabase
         .from('afiliados')
         .select('*, sectores(nombre, encargado_nombre), perfiles(nombre_completo, email)', { count: 'exact' })
         .order('primer_apellido')
-        .range(desde, hasta)
+
       if (ROLES_SOLO_PROPIOS.includes(rol)) q = q.eq('encargado_id', userId)
-      if (termino.length >= 2) {
-        q = q.or(`primer_apellido.ilike.%${termino}%,primer_nombre.ilike.%${termino}%,dpi.eq.${termino}`)
+
+      // Buscador principal (arriba): solo DPI
+      if (termino.trim().length >= 2) {
+        q = q.ilike('dpi', `%${termino.trim()}%`)
       }
-      const { data, count } = await q
+
+      // Filtros por columna
+      if (filtrosActuales.dpi.trim()) {
+        q = q.ilike('dpi', `%${filtrosActuales.dpi.trim()}%`)
+      }
+      if (filtrosActuales.telefono.trim()) {
+        q = q.ilike('telefono', `%${filtrosActuales.telefono.trim()}%`)
+      }
+      if (filtrosActuales.edad.trim()) {
+        q = q.ilike('edad', `%${filtrosActuales.edad.trim()}%`)
+      }
+      if (filtrosActuales.genero) {
+        q = q.eq('genero', filtrosActuales.genero)
+      }
+      if (filtrosActuales.rol) {
+        if (filtrosActuales.rol === 'Simpatizante') {
+          // rol_afiliado nulo se muestra como "Simpatizante" en pantalla
+          q = q.or('rol_afiliado.eq.Simpatizante,rol_afiliado.is.null')
+        } else {
+          q = q.eq('rol_afiliado', filtrosActuales.rol)
+        }
+      }
+      if (filtrosActuales.sector) {
+        const sectorEncontrado = sectoresList.find((s) => s.nombre === filtrosActuales.sector)
+        q = q.eq('sector_id', sectorEncontrado ? sectorEncontrado.id : -1)
+      }
+      if (filtrosActuales.ubicacion.trim()) {
+        q = q.ilike('nombre_ubicacion', `%${filtrosActuales.ubicacion.trim()}%`)
+      }
+      if (filtrosActuales.encargado.trim()) {
+        const idsCoincidentes = sectoresList
+          .filter((s) => (s.encargado_nombre || '').toLowerCase().includes(filtrosActuales.encargado.trim().toLowerCase()))
+          .map((s) => s.id)
+        q = q.in('sector_id', idsCoincidentes.length > 0 ? idsCoincidentes : [-1])
+      }
+      if (filtrosActuales.afiliado_por.trim()) {
+        q = q.ilike('afiliado_por', `%${filtrosActuales.afiliado_por.trim()}%`)
+      }
+      if (filtrosActuales.vota) {
+        if (filtrosActuales.vota === 'si') {
+          q = q.eq('vota_en_pinula', true)
+        } else {
+          q = q.or('vota_en_pinula.eq.false,vota_en_pinula.is.null')
+        }
+      }
+      if (filtrosActuales.nombre.trim()) {
+        const t = filtrosActuales.nombre.trim()
+        q = q.or(
+          `primer_apellido.ilike.%${t}%,segundo_apellido.ilike.%${t}%,primer_nombre.ilike.%${t}%,segundo_nombre.ilike.%${t}%`
+        )
+      }
+      if (filtrosActuales.fecha_nacimiento.trim()) {
+        const iso = parseFechaInput(filtrosActuales.fecha_nacimiento)
+        // Si la fecha esta incompleta, no mostramos resultados todavia
+        // (en vez de ignorar el filtro, lo cual mostraria datos no filtrados)
+        q = q.eq('fecha_nacimiento', iso || '0000-00-00')
+      }
+      if (filtrosActuales.fecha_registro.trim()) {
+        const iso = parseFechaInput(filtrosActuales.fecha_registro)
+        if (iso) {
+          const inicio = `${iso}T00:00:00`
+          const finDate = new Date(`${iso}T00:00:00Z`)
+          finDate.setUTCDate(finDate.getUTCDate() + 1)
+          const fin = finDate.toISOString().slice(0, 19)
+          q = q.gte('created_at', inicio).lt('created_at', fin)
+        } else {
+          q = q.eq('created_at', '0000-00-00T00:00:00')
+        }
+      }
+
+      q = q.range(desde, hasta)
+
+      const { data, count, error } = await q
+      if (error) console.error('Error cargando afiliados:', error.message)
       setAfiliados(data || [])
       setTotal(count || 0)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [sectoresList])
 
   const handleBuscar = () => {
     setPage(1)
-    if (perfil) cargarAfiliados(perfil.rol, perfil.id, busqueda, 1)
+    if (perfil) cargarAfiliados(perfil.rol, perfil.id, busqueda, filtros, 1)
   }
 
   const irAPagina = (p: number) => {
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
     if (p < 1 || p > totalPages || p === page) return
     setPage(p)
-    if (perfil) cargarAfiliados(perfil.rol, perfil.id, busqueda, p)
+    if (perfil) cargarAfiliados(perfil.rol, perfil.id, busqueda, filtros, p)
   }
 
   const formatNombre = (a: Afiliado) =>
@@ -143,16 +262,14 @@ export default function AfiliadosPage() {
     }
   }
 
-  const handleFiltroChange = (campo: keyof typeof filtros, valor: string) => {
+  const handleFiltroChange = (campo: keyof FiltrosState, valor: string) => {
     setFiltros((prev) => ({ ...prev, [campo]: valor }))
   }
 
   const limpiarFiltros = () => {
-    setFiltros({
-      nombre: '', dpi: '', telefono: '', fecha_nacimiento: '', edad: '',
-      genero: '', rol: '', sector: '', ubicacion: '',
-      encargado: '', afiliado_por: '', vota: '', fecha_registro: '',
-    })
+    setFiltros(FILTROS_VACIOS)
+    setPage(1)
+    if (perfil) cargarAfiliados(perfil.rol, perfil.id, busqueda, FILTROS_VACIOS, 1)
   }
 
   const handleSort = (field: SortField) => {
@@ -164,12 +281,34 @@ export default function AfiliadosPage() {
     }
   }
 
-  const sectoresUnicos = useMemo(() => {
-    const set = new Set<string>()
-    afiliados.forEach((a) => { if ((a as any).sectores?.nombre) set.add((a as any).sectores.nombre) })
-    return Array.from(set).sort()
-  }, [afiliados])
+  // Los filtros de columna ahora buscan en TODA la base de datos, con un
+  // pequeno retraso mientras el usuario escribe (evita disparar una consulta
+  // por cada tecla). El primer render se ignora para no duplicar la carga
+  // inicial que ya hace init().
+  const primerRenderFiltros = useRef(true)
+  useEffect(() => {
+    if (!perfil) return
+    if (primerRenderFiltros.current) {
+      primerRenderFiltros.current = false
+      return
+    }
+    const timer = setTimeout(() => {
+      setPage(1)
+      cargarAfiliados(perfil.rol, perfil.id, busqueda, filtros, 1)
+    }, 450)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros])
 
+  // Todos los sectores reales (no solo los presentes en la pagina actual)
+  const sectoresUnicos = useMemo(
+    () => sectoresList.map((s) => s.nombre).sort(),
+    [sectoresList]
+  )
+
+  // Nota: esta lista solo refleja los generos presentes en la pagina cargada
+  // actualmente, no todos los de la base de datos. Si se necesita el listado
+  // completo, se puede ajustar para traerlo aparte.
   const generosUnicos = useMemo(() => {
     const set = new Set<string>()
     afiliados.forEach((a) => { if (a.genero) set.add(a.genero) })
@@ -195,44 +334,18 @@ export default function AfiliadosPage() {
     }
   }
 
-  const afiliadosFiltrados = useMemo(() => {
-    let lista = afiliados.filter((a) => {
-      const rol = (a as any).rol_afiliado || 'Simpatizante'
-      const encargadoSector = ((a as any).sectores)?.encargado_nombre || ''
-      const ubicacion = a.nombre_ubicacion || ''
-      const afiliadoPor = (a as any).afiliado_por || ''
-      const fechaNac = formatFecha(a.fecha_nacimiento)
-      const edad = String((a as any).edad ?? '')
-      const fechaReg = formatFecha(a.created_at as any)
-
-      if (filtros.nombre && !formatNombre(a).toLowerCase().includes(filtros.nombre.toLowerCase())) return false
-      if (filtros.dpi && !(a.dpi || '').toLowerCase().includes(filtros.dpi.toLowerCase())) return false
-      if (filtros.telefono && !(a.telefono || '').toLowerCase().includes(filtros.telefono.toLowerCase())) return false
-      if (filtros.fecha_nacimiento && !fechaNac.includes(filtros.fecha_nacimiento)) return false
-      if (filtros.edad && !edad.includes(filtros.edad)) return false
-      if (filtros.genero && a.genero !== filtros.genero) return false
-      if (filtros.rol && rol !== filtros.rol) return false
-      if (filtros.sector && (a as any).sectores?.nombre !== filtros.sector) return false
-      if (filtros.ubicacion && !ubicacion.toLowerCase().includes(filtros.ubicacion.toLowerCase())) return false
-      if (filtros.encargado && !encargadoSector.toLowerCase().includes(filtros.encargado.toLowerCase())) return false
-      if (filtros.afiliado_por && !afiliadoPor.toLowerCase().includes(filtros.afiliado_por.toLowerCase())) return false
-      if (filtros.vota && (filtros.vota === 'si' ? !a.vota_en_pinula : a.vota_en_pinula)) return false
-      if (filtros.fecha_registro && !fechaReg.includes(filtros.fecha_registro)) return false
-      return true
+  // El filtrado ya ocurre en el servidor (Supabase). Aqui solo se ordena
+  // la pagina actual ya filtrada.
+  const afiliadosOrdenados = useMemo(() => {
+    if (!sortField) return afiliados
+    return [...afiliados].sort((a, b) => {
+      const va = getValor(a, sortField)
+      const vb = getValor(b, sortField)
+      if (va < vb) return sortDir === 'asc' ? -1 : 1
+      if (va > vb) return sortDir === 'asc' ? 1 : -1
+      return 0
     })
-
-    if (sortField) {
-      lista = [...lista].sort((a, b) => {
-        const va = getValor(a, sortField)
-        const vb = getValor(b, sortField)
-        if (va < vb) return sortDir === 'asc' ? -1 : 1
-        if (va > vb) return sortDir === 'asc' ? 1 : -1
-        return 0
-      })
-    }
-
-    return lista
-  }, [afiliados, filtros, sortField, sortDir])
+  }, [afiliados, sortField, sortDir])
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) {
@@ -372,10 +485,10 @@ export default function AfiliadosPage() {
               onChange={(e) => setBusqueda(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleBuscar()}
               className="input-field flex-1"
-              placeholder="Buscar por nombre, apellido o DPI (servidor)..."
+              placeholder="Buscar por DPI (en toda la base de datos)..."
             />
             {busqueda && (
-              <button onClick={() => { setBusqueda(''); setPage(1); if (perfil) cargarAfiliados(perfil.rol, perfil.id, '', 1) }} className="px-3 rounded-lg border text-sm" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+              <button onClick={() => { setBusqueda(''); setPage(1); if (perfil) cargarAfiliados(perfil.rol, perfil.id, '', filtros, 1) }} className="px-3 rounded-lg border text-sm" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
                 X
               </button>
             )}
@@ -387,7 +500,7 @@ export default function AfiliadosPage() {
 
         <div className="flex items-center justify-between flex-wrap gap-2">
           <p className="text-sm font-medium" style={{ color: 'var(--texto-secundario)' }}>
-            {loading ? 'Cargando...' : `${afiliadosFiltrados.length} de ${total} afiliado${total !== 1 ? 's' : ''} · Página ${page} de ${totalPages}`}
+            {loading ? 'Cargando...' : `${afiliadosOrdenados.length} de ${total} afiliado${total !== 1 ? 's' : ''} · Página ${page} de ${totalPages}`}
           </p>
           <div className="flex items-center gap-2">
             <button onClick={limpiarFiltros} className="text-xs px-3 py-1.5 rounded-lg border font-medium" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
@@ -408,10 +521,10 @@ export default function AfiliadosPage() {
           <div className="card text-center py-10">
             <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto" style={{ borderColor: '#004466' }}></div>
           </div>
-        ) : afiliados.length === 0 ? (
+        ) : total === 0 ? (
           <div className="card text-center py-10">
-            <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>No hay afiliados registrados</p>
-            <p className="text-sm mt-1" style={{ color: 'var(--texto-secundario)' }}>Haz clic en "+ Nuevo" para agregar el primero.</p>
+            <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>No se encontraron afiliados</p>
+            <p className="text-sm mt-1" style={{ color: 'var(--texto-secundario)' }}>Verifica los filtros aplicados o haz clic en "+ Nuevo" para agregar el primero.</p>
           </div>
         ) : (
           <div className="card overflow-x-auto p-0">
@@ -496,14 +609,14 @@ export default function AfiliadosPage() {
                 </tr>
               </thead>
               <tbody>
-                {afiliadosFiltrados.length === 0 ? (
+                {afiliadosOrdenados.length === 0 ? (
                   <tr>
                     <td colSpan={14} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>
                       Ningun afiliado coincide con los filtros aplicados.
                     </td>
                   </tr>
                 ) : (
-                  afiliadosFiltrados.map((a, idx) => {
+                  afiliadosOrdenados.map((a, idx) => {
                     const rol = (a as any).rol_afiliado || 'Simpatizante'
                     const estiloRol = colorRol[rol] || colorRol['Simpatizante']
                     const encargadoSector = ((a as any).sectores)?.encargado_nombre
