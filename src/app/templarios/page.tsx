@@ -25,6 +25,35 @@ type AfiliadoPorStats = {
   roles: RolCount
 }
 
+// ──────────────────────────────────────────────────────────────
+// Normalización de nombres de templarios
+// ──────────────────────────────────────────────────────────────
+// Resuelve automáticamente variantes por tildes, mayúsculas o
+// espacios extra (ej. "Daniel Gonzalez" vs "Daniel González").
+// NO fusiona nombres realmente distintos (ej. "Carlos Monterroso"
+// vs "Carlos Morente" se mantienen separados).
+function normalizarClave(nombre: string): string {
+  return nombre
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // quita tildes/diacríticos
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ') // colapsa espacios múltiples/invisibles
+}
+
+// Alias manuales confirmados: casos donde la normalización por
+// tildes no alcanza (ej. nombre incompleto) pero SÍ es la misma
+// persona. Confirmado con el usuario antes de agregar cada entrada.
+// La clave y el valor deben ser resultado de normalizarClave().
+const ALIAS_TEMPLARIOS: Record<string, string> = {
+  'alejandro': 'alejandro rustrian',
+}
+
+function claveFinal(nombreOriginal: string): string {
+  const base = normalizarClave(nombreOriginal)
+  return ALIAS_TEMPLARIOS[base] || base
+}
+
 export default function TemplariosPage() {
   const router = useRouter()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
@@ -72,21 +101,28 @@ export default function TemplariosPage() {
 
       const data = allRows
 
+      // mapa por CLAVE NORMALIZADA -> stats
       const mapa: Record<string, AfiliadoPorStats> = {}
+      // conteo de variantes originales por clave, para elegir cuál mostrar
+      const variantesPorClave: Record<string, Record<string, number>> = {}
 
       for (const row of data || []) {
-        const key = (row.afiliado_por as string) || 'Sin registrar'
+        const nombreOriginal = (row.afiliado_por as string) || 'Sin registrar'
+        const key = claveFinal(nombreOriginal)
         const sectorNombre = row.sector_nombre || 'Sin sector'
         const rol = (row.rol_afiliado || '').toLowerCase()
 
         if (!mapa[key]) {
           mapa[key] = {
-            afiliado_por: key,
+            afiliado_por: nombreOriginal, // se ajusta al final con la variante más frecuente
             total: 0,
             sectores: [],
             roles: { lider: 0, guerrero: 0, organizador: 0, simpatizante: 0, otro: 0 }
           }
+          variantesPorClave[key] = {}
         }
+
+        variantesPorClave[key][nombreOriginal] = (variantesPorClave[key][nombreOriginal] || 0) + 1
 
         mapa[key].total++
 
@@ -102,6 +138,13 @@ export default function TemplariosPage() {
         else if (rol.includes('organizador')) mapa[key].roles.organizador++
         else if (rol.includes('simpatizante')) mapa[key].roles.simpatizante++
         else mapa[key].roles.otro++
+      }
+
+      // Para cada grupo, usar como nombre visible la variante con más ocurrencias
+      for (const key of Object.keys(mapa)) {
+        const variantes = variantesPorClave[key]
+        const nombreMasFrecuente = Object.entries(variantes).sort((a, b) => b[1] - a[1])[0][0]
+        mapa[key].afiliado_por = nombreMasFrecuente
       }
 
       const resultado = Object.values(mapa).sort((a, b) => b.total - a.total)
