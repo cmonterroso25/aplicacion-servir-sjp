@@ -219,13 +219,13 @@ export default function EstadisticasPage() {
                 return (
                   <div key={e.sector} className="flex items-center gap-3">
                     <p
-                      className="text-xs font-medium w-20 sm:w-28 flex-shrink-0 truncate text-right"
+                      className="text-xs font-medium w-28 sm:w-40 flex-shrink-0 text-right leading-tight"
                       style={{ color: 'var(--texto-secundario)' }}
                       title={e.sector}
                     >
                       {e.sector}
                     </p>
-                    <div className="flex-1 h-5 rounded-md overflow-hidden" style={{ background: 'var(--color-fondo)' }}>
+                    <div className="flex-1 h-5 rounded-md overflow-hidden">
                       <div
                         className="h-full rounded-md flex items-center justify-end px-2 transition-all"
                         style={{ width: `${ancho}%`, background: '#004466', minWidth: '1.75rem' }}
