@@ -52,11 +52,16 @@ export default function ConsultaPage() {
 
       const dpis = (data || []).map((p) => p.dpi).filter(Boolean) as string[]
       if (dpis.length > 0) {
-        const { data: afiliadosData } = await supabase
-          .from('afiliados')
-          .select('dpi')
-          .in('dpi', dpis)
-        setAfiliadosExistentes(new Set((afiliadosData || []).map((a) => a.dpi).filter(Boolean) as string[]))
+        // Usamos una funcion RPC (SECURITY DEFINER) en vez de consultar
+        // "afiliados" directo, porque RLS limita a los lideres a ver
+        // solo sus propios afiliados. Esta funcion solo confirma
+        // existencia del DPI, sin exponer datos de otros afiliados.
+        const { data: afiliadosData, error: rpcError } = await supabase
+          .rpc('check_afiliados_existentes', { dpis })
+        if (rpcError) throw rpcError
+        setAfiliadosExistentes(
+          new Set((afiliadosData || []).map((a: { dpi: string }) => a.dpi).filter(Boolean))
+        )
       } else {
         setAfiliadosExistentes(new Set())
       }

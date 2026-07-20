@@ -68,18 +68,23 @@ export default function NavBar({ rol }: Props) {
     },
   ]
 
-  // Roles con acceso restringido: lider y colaborador solo ven Afiliados;
-  // templario ve Consulta DPI y Afiliados
-  const ROLES_SOLO_AFILIADOS = ['lider', 'colaborador']
+  // Roles con acceso restringido:
+  // - lider: solo ve Consulta DPI
+  // - colaborador: solo ve Afiliados
+  // - templario: ve Consulta DPI y Afiliados
+  const ROLES_SOLO_CONSULTA = ['lider']
+  const ROLES_SOLO_AFILIADOS = ['colaborador']
   const ROLES_CONSULTA_Y_AFILIADOS = ['templario']
 
-  // Mientras el rol no se ha determinado (carga inicial de sesión/perfil),
+  // Mientras el rol no se ha determinado (carga inicial de sesion/perfil),
   // no mostramos ningun tab para evitar un "flash" con todas las opciones
   // visibles antes de que se aplique la restriccion correcta.
   const rolDefinido = !!rol
 
   const tabs = !rolDefinido
     ? []
+    : ROLES_SOLO_CONSULTA.includes(rol)
+    ? tabsCompletos.filter((t) => t.href === '/consulta')
     : ROLES_SOLO_AFILIADOS.includes(rol)
     ? tabsCompletos.filter((t) => t.href === '/afiliados')
     : ROLES_CONSULTA_Y_AFILIADOS.includes(rol)
