@@ -369,30 +369,25 @@ export default function SecretariasPage() {
             </svg>
           </div>
         ) : (
-          <div className="space-y-5">
-
-            <div className="card text-center !py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--texto-secundario)' }}>Coordinador Municipal</p>
-              <p className="font-semibold text-base" style={{ color: '#004466' }}>{coordinador}</p>
-            </div>
+          <div className="space-y-1">
 
             {/* Organigrama */}
-            <div className="flex flex-col items-center">
+            <div className="flex flex-col items-center pt-2">
 
-              {/* Nodo Pentágono */}
+              {/* Nodo Coordinador Municipal */}
               <div className="rounded-2xl px-7 py-3 text-center shadow-sm shrink-0" style={{ background: '#004466' }}>
-                <p className="text-white font-bold text-sm tracking-wide">PENTÁGONO</p>
-                <p className="text-white/70 text-[10px] mt-0.5">Órgano de dirección</p>
+                <p className="text-white/70 text-[10px] uppercase tracking-wide">Coordinador Municipal</p>
+                <p className="text-white font-bold text-sm">{coordinador}</p>
               </div>
 
-              {/* Tronco principal */}
+              {/* Tronco hacia las secretarías de línea indirecta */}
               <div className="w-0.5 h-6" style={{ background: 'var(--color-borde)' }} />
 
-              {/* Secretarías con línea indirecta (reportan directo) */}
+              {/* Secretarías con línea indirecta (reportan directo al Coordinador, no al Pentágono) */}
               {reportanDirecto.length > 0 && (
                 <div className="flex flex-col items-center mb-1">
                   <p className="text-[10px] italic mb-1" style={{ color: 'var(--texto-secundario)' }}>
-                    línea de reporte indirecta
+                    reportan directo al Coordinador — línea indirecta
                   </p>
                   <div
                     className="inline-flex"
@@ -414,6 +409,18 @@ export default function SecretariasPage() {
                   </div>
                 </div>
               )}
+
+              {/* Tronco hacia Pentágono */}
+              <div className="w-0.5 h-6" style={{ background: 'var(--color-borde)' }} />
+
+              {/* Nodo Pentágono */}
+              <div className="rounded-2xl px-7 py-3 text-center shadow-sm shrink-0" style={{ background: '#004466' }}>
+                <p className="text-white font-bold text-sm tracking-wide">PENTÁGONO</p>
+                <p className="text-white/70 text-[10px] mt-0.5">Órgano de dirección</p>
+              </div>
+
+              {/* Tronco hacia los grupos */}
+              <div className="w-0.5 h-6" style={{ background: 'var(--color-borde)' }} />
 
               {/* Grupos de secretarías, encadenados con líneas sólidas */}
               <div className="w-full max-w-xl">
