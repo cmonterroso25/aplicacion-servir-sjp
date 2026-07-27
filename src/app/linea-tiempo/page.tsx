@@ -116,9 +116,16 @@ export default function LineaTiempoPage() {
       const f = sumarDias(base, i)
       const key = f.slice(0, 7) // YYYY-MM
       if (!grupoActual || grupoActual.key !== key) {
-        const [y, m] = key.split('-')
-        grupoActual = { key, label: `${MESES[parseInt(m) - 1]} ${y}`, dias: [] }
-        grupos.push(grupoActual)
+        const partes: string[] = key.split('-')
+        const y: string = partes[0]
+        const m: string = partes[1]
+        const nuevoGrupo: { key: string; label: string; dias: string[] } = {
+          key,
+          label: `${MESES[parseInt(m) - 1]} ${y}`,
+          dias: []
+        }
+        grupoActual = nuevoGrupo
+        grupos.push(nuevoGrupo)
       }
       grupoActual.dias.push(f)
     }
