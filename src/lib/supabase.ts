@@ -82,3 +82,35 @@ export type LineaTiempoEvento = {
   creado_por: string
   created_at: string | null
 }
+export type Secretaria = {
+  id: string
+  nombre: string
+  grupo: 'sectorial' | 'territorial' | 'transversal' | 'estrategica' | 'administrativa'
+  reporta_directo: boolean
+  transversal: boolean
+  encargado_nombre: string | null
+  mision: string | null
+  vision: string | null
+  funciones_permanentes: string | null
+  funciones_proselitismo: string | null
+  funciones_campana: string | null
+  metas_corto: string | null
+  metas_mediano: string | null
+  metas_largo: string | null
+  coordinacion: string | null
+  orden: number
+  created_at: string | null
+}
+export type SecretariaIndicador = {
+  id: string
+  secretaria_id: string
+  indicador: string
+  meta: string | null
+  periodo: string | null
+  orden: number
+}
+export type Configuracion = {
+  clave: string
+  valor: string | null
+  updated_at: string | null
+}

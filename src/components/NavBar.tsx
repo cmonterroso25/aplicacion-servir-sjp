@@ -73,6 +73,13 @@ export default function NavBar({ rol }: Props) {
         </svg>
       )
     },
+    {
+      label: 'Secretarías', href: '/secretarias', icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2M5 21H3m16 0h-5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 8v-4a1 1 0 011-1h0a1 1 0 011 1v4" />
+        </svg>
+      )
+    },
   ]
 
   // Roles con acceso restringido:
@@ -82,6 +89,9 @@ export default function NavBar({ rol }: Props) {
   const ROLES_SOLO_CONSULTA = ['lider']
   const ROLES_SOLO_AFILIADOS = ['colaborador']
   const ROLES_CONSULTA_Y_AFILIADOS = ['templario']
+
+  // Tabs exclusivas de admin y pentagono
+  const TABS_ADMIN_PENTAGONO = ['/linea-tiempo', '/secretarias']
 
   // Mientras el rol no se ha determinado (carga inicial de sesion/perfil),
   // no mostramos ningun tab para evitar un "flash" con todas las opciones
@@ -96,8 +106,7 @@ export default function NavBar({ rol }: Props) {
     ? tabsCompletos.filter((t) => t.href === '/afiliados')
     : ROLES_CONSULTA_Y_AFILIADOS.includes(rol)
     ? tabsCompletos.filter((t) => t.href === '/consulta' || t.href === '/afiliados')
-    // Línea de tiempo es exclusiva de admin y pentagono
-    : tabsCompletos.filter((t) => t.href !== '/linea-tiempo' || rol === 'admin' || rol === 'pentagono')
+    : tabsCompletos.filter((t) => !TABS_ADMIN_PENTAGONO.includes(t.href) || rol === 'admin' || rol === 'pentagono')
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
 
