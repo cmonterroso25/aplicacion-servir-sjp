@@ -66,6 +66,13 @@ export default function NavBar({ rol }: Props) {
         </svg>
       )
     },
+    {
+      label: 'Línea de tiempo', href: '/linea-tiempo', icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      )
+    },
   ]
 
   // Roles con acceso restringido:
@@ -89,7 +96,8 @@ export default function NavBar({ rol }: Props) {
     ? tabsCompletos.filter((t) => t.href === '/afiliados')
     : ROLES_CONSULTA_Y_AFILIADOS.includes(rol)
     ? tabsCompletos.filter((t) => t.href === '/consulta' || t.href === '/afiliados')
-    : tabsCompletos
+    // Línea de tiempo es exclusiva de admin y pentagono
+    : tabsCompletos.filter((t) => t.href !== '/linea-tiempo' || rol === 'admin' || rol === 'pentagono')
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
 

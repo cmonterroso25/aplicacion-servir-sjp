@@ -9,7 +9,9 @@ const FECHA_ELECCIONES = new Date('2027-06-27T00:00:00')
 
 const NOMBRES_FEMENINOS = ['Angelica Ramirez', 'Tatiana Rivera', 'Yanira Ramirez']
 
-function calcularTiempoRestante() {
+type Tiempo = { dias: number; horas: number; minutos: number; segundos: number; terminado: boolean }
+
+function calcularTiempoRestante(): Tiempo {
   const ahora = new Date().getTime()
   const diferencia = FECHA_ELECCIONES.getTime() - ahora
 
@@ -28,7 +30,8 @@ function calcularTiempoRestante() {
 export default function InicioPage() {
   const router = useRouter()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
-  const [tiempo, setTiempo] = useState(calcularTiempoRestante())
+  // ← Arranca en null: servidor y cliente coinciden en el primer render.
+  const [tiempo, setTiempo] = useState<Tiempo | null>(null)
 
   useEffect(() => {
     const init = async () => {
@@ -42,6 +45,8 @@ export default function InicioPage() {
   }, [router])
 
   useEffect(() => {
+    // ← El cálculo real solo corre en el cliente, tras montar.
+    setTiempo(calcularTiempoRestante())
     const intervalo = setInterval(() => {
       setTiempo(calcularTiempoRestante())
     }, 1000)
@@ -88,7 +93,18 @@ export default function InicioPage() {
             Te recuerdo que quedan
           </p>
 
-          {tiempo.terminado ? (
+          {!tiempo ? (
+            // ← Placeholder idéntico en servidor y cliente hasta que el useEffect calcule el valor real.
+            <div className="flex items-center justify-center gap-4 sm:gap-6 flex-wrap my-4">
+              {unidad(0, 'Dias')}
+              <span className="text-3xl font-bold" style={{ color: '#dc2626' }}>:</span>
+              {unidad(0, 'Horas')}
+              <span className="text-3xl font-bold" style={{ color: '#dc2626' }}>:</span>
+              {unidad(0, 'Minutos')}
+              <span className="text-3xl font-bold" style={{ color: '#dc2626' }}>:</span>
+              {unidad(0, 'Segundos')}
+            </div>
+          ) : tiempo.terminado ? (
             <p className="font-bold text-lg my-4" style={{ color: '#dc2626' }}>
               ¡Las elecciones ya comenzaron!
             </p>

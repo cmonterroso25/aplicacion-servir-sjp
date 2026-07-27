@@ -1,10 +1,8 @@
 import { createBrowserClient } from '@supabase/ssr'
-
 export const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
-
 export type Empadronado = {
   id: number
   dpi: string
@@ -18,7 +16,6 @@ export type Empadronado = {
   municipio: string
   direccion: string
 }
-
 export type Perfil = {
   id: string
   email: string
@@ -26,14 +23,12 @@ export type Perfil = {
   rol: string
   created_at: string
 }
-
 export type Sector = {
   id: number
   nombre: string
   descripcion: string | null
   encargado_nombre: string | null
 }
-
 export type Afiliado = {
   id: number
   primer_apellido: string
@@ -54,12 +49,10 @@ export type Afiliado = {
   afiliado_por: string | null
   rol_afiliado: string | null
 }
-
 export type AfiliadoConRelaciones = Afiliado & {
   sectores: { nombre: string; encargado_nombre: string | null } | null
   perfiles: { nombre_completo: string | null; email: string } | null
 }
-
 export type Reunion = {
   id: number
   titulo: string
@@ -72,6 +65,20 @@ export type Reunion = {
   sector_id: number | null
   tipo: 'general' | 'sector' | 'templarios'
   created_at: string | null
+  origen?: 'calendario' | 'linea_tiempo'
+  linea_tiempo_id?: string | null
   perfiles?: { nombre_completo: string | null; email: string } | null
   sectores?: { nombre: string } | null
+}
+export type LineaTiempoEvento = {
+  id: string
+  titulo: string
+  descripcion: string | null
+  lugar: string | null
+  encargado_nombre: string | null
+  fecha: string
+  hora_inicio: string
+  hora_fin: string | null
+  creado_por: string
+  created_at: string | null
 }
