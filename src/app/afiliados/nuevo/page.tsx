@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, type Sector, type Perfil } from '@/lib/supabase'
 import { TIPOS_UBICACION, OPCIONES_UBICACION, type TipoUbicacion } from '@/lib/ubicaciones'
 
-const ROLES_AFILIADO = ['Simpatizante', 'Organizador', 'Guerrero', 'Lider', 'Templario']
+const ROLES_AFILIADO = ['Simpatizante', 'Organizador', 'Guerrero', 'Líder', 'Templario']
 
 const MESES = [
   { valor: '01', nombre: 'Enero' },
@@ -226,7 +226,7 @@ function NuevoAfiliadoForm() {
     Simpatizante: { bg: '#e0f7fa', color: '#004466' },
     Organizador:  { bg: '#fff3e0', color: '#b45309' },
     Guerrero:     { bg: '#fce4ec', color: '#9b1c3a' },
-    Lider:        { bg: '#e8f5e9', color: '#166534' },
+    Líder:        { bg: '#e8f5e9', color: '#166534' },
     Templario:    { bg: '#ede7f6', color: '#4527a0' },
   }
 

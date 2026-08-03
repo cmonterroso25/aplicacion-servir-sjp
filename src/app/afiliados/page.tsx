@@ -9,11 +9,11 @@ const colorRol: Record<string, { bg: string; color: string }> = {
   Simpatizante: { bg: '#e0f7fa', color: '#004466' },
   Organizador:  { bg: '#fff3e0', color: '#b45309' },
   Guerrero:     { bg: '#fce4ec', color: '#9b1c3a' },
-  Lider:        { bg: '#e8f5e9', color: '#166534' },
+  Líder:        { bg: '#e8f5e9', color: '#166534' },
   Templario:    { bg: '#ede7f6', color: '#4527a0' },
 }
 
-const ROLES = ['Simpatizante', 'Organizador', 'Guerrero', 'Lider', 'Templario']
+const ROLES = ['Simpatizante', 'Organizador', 'Guerrero', 'Líder', 'Templario']
 
 // Roles que solo ven / filtran por sus propios afiliados
 const ROLES_SOLO_PROPIOS = ['colaborador', 'encargado', 'pentagono', 'templario']
