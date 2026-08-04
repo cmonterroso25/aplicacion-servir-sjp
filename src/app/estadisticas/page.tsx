@@ -5,6 +5,11 @@ import { useRouter } from 'next/navigation'
 import { supabase, type Perfil } from '@/lib/supabase'
 import NavBar from '@/components/NavBar'
 
+type AfiliadoPorCount = {
+  nombre: string
+  total: number
+}
+
 type EstadisticaSector = {
   sector: string
   encargado: string
@@ -16,9 +21,25 @@ type EstadisticaSector = {
   guerrero: number
   lider: number
   templario: number
+  afiliado_por: AfiliadoPorCount[]
 }
 
 const ROLES_SIN_ACCESO = ['lider', 'colaborador', 'templario']
+
+// ──────────────────────────────────────────────────────────────
+// Normalización de nombres (mismo criterio que en /templarios)
+// ──────────────────────────────────────────────────────────────
+// Resuelve variantes por tildes, mayúsculas o espacios extra
+// (ej. "René Galicia" vs "Rene Galicia", "Sebastián España" vs
+// "Sebastian Espana"). NO fusiona nombres realmente distintos.
+function normalizarClave(nombre: string): string {
+  return nombre
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // quita tildes/diacríticos
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ') // colapsa espacios múltiples/invisibles
+}
 
 export default function EstadisticasPage() {
   const router = useRouter()
@@ -27,6 +48,7 @@ export default function EstadisticasPage() {
   const [totales, setTotales] = useState({ total: 0, vota: 0, no_vota: 0 })
   const [loading, setLoading] = useState(true)
   const [errorCarga, setErrorCarga] = useState('')
+  const [expandido, setExpandido] = useState<string | null>(null)
 
   useEffect(() => {
     const init = async () => {
@@ -84,7 +106,7 @@ export default function EstadisticasPage() {
       while (hasMore) {
         let q = supabase
           .from('afiliados')
-          .select('sector_id, vota_en_pinula, rol_afiliado, sectores(nombre), encargado_id')
+          .select('sector_id, vota_en_pinula, rol_afiliado, afiliado_por, sectores(nombre), encargado_id')
           .range(from, from + pageSize - 1)
 
         if (rol === 'encargado') {
@@ -107,8 +129,12 @@ export default function EstadisticasPage() {
 
       if (!data) return
 
-      // Agrupar por sector
+      // Agrupar por sector. Los "afiliado por" se agrupan por clave
+      // normalizada (sin tildes/mayúsculas) para fusionar variantes del
+      // mismo nombre; se muestra la variante más frecuente encontrada.
       const mapa: Record<string, EstadisticaSector> = {}
+      const afiliadoPorVariantes: Record<string, Record<string, Record<string, number>>> = {}
+      const afiliadoPorTotales: Record<string, Record<string, number>> = {}
 
       data.forEach((a: any) => {
         const sectorNombre = a.sectores?.nombre || 'Sin sector'
@@ -128,20 +154,46 @@ export default function EstadisticasPage() {
             guerrero: 0,
             lider: 0,
             templario: 0,
+            afiliado_por: [],
           }
+          afiliadoPorVariantes[key] = {}
+          afiliadoPorTotales[key] = {}
         }
 
         mapa[key].total++
         if (a.vota_en_pinula) mapa[key].vota_pinula++
         else mapa[key].no_vota++
 
-        const rol_a = (a.rol_afiliado || 'Simpatizante').toLowerCase()
+        // Comparación de rol sin tildes/mayúsculas: los roles se guardan
+        // como 'Líder', 'Guerrero', etc. y sin esto "Líder" nunca
+        // coincidía con 'lider'.
+        const rol_a = normalizarClave(a.rol_afiliado || 'Simpatizante')
         if (rol_a === 'simpatizante') mapa[key].simpatizante++
         else if (rol_a === 'organizador') mapa[key].organizador++
         else if (rol_a === 'guerrero') mapa[key].guerrero++
         else if (rol_a === 'lider') mapa[key].lider++
         else if (rol_a === 'templario') mapa[key].templario++
+
+        const afiliadoPorOriginal = a.afiliado_por || 'Sin registrar'
+        const afiliadoPorKey = normalizarClave(afiliadoPorOriginal)
+
+        afiliadoPorTotales[key][afiliadoPorKey] = (afiliadoPorTotales[key][afiliadoPorKey] || 0) + 1
+        if (!afiliadoPorVariantes[key][afiliadoPorKey]) afiliadoPorVariantes[key][afiliadoPorKey] = {}
+        afiliadoPorVariantes[key][afiliadoPorKey][afiliadoPorOriginal] =
+          (afiliadoPorVariantes[key][afiliadoPorKey][afiliadoPorOriginal] || 0) + 1
       })
+
+      // Resolver, para cada sector y cada clave normalizada, la variante
+      // de nombre más frecuente para mostrarla.
+      for (const sectorKey of Object.keys(mapa)) {
+        const totalesSector = afiliadoPorTotales[sectorKey]
+        const variantesSector = afiliadoPorVariantes[sectorKey]
+        mapa[sectorKey].afiliado_por = Object.keys(totalesSector).map((apKey) => {
+          const variantes = variantesSector[apKey]
+          const nombreMasFrecuente = Object.entries(variantes).sort((a, b) => b[1] - a[1])[0][0]
+          return { nombre: nombreMasFrecuente, total: totalesSector[apKey] }
+        }).sort((a, b) => b.total - a.total)
+      }
 
       const lista = Object.values(mapa).sort((a, b) => b.total - a.total)
       setEstadisticas(lista)
@@ -243,52 +295,84 @@ export default function EstadisticasPage() {
             <h2 className="font-semibold text-sm" style={{ color: 'var(--texto-principal)' }}>
               Por sector
             </h2>
-            {estadisticas.map((e) => (
-              <div key={e.sector} className="card space-y-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-semibold" style={{ color: 'var(--texto-principal)' }}>{e.sector}</p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--texto-secundario)' }}>
-                      Encargado: {e.encargado}
-                    </p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-2xl font-bold" style={{ color: '#004466' }}>{e.total}</p>
-                    <p className="text-xs" style={{ color: 'var(--texto-secundario)' }}>afiliados</p>
-                  </div>
-                </div>
+            {estadisticas.map((e) => {
+              const abierto = expandido === e.sector
+              return (
+                <div key={e.sector} className="card hover:shadow-md transition-shadow">
+                  <button className="w-full text-left" onClick={() => setExpandido(abierto ? null : e.sector)}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="font-semibold" style={{ color: 'var(--texto-principal)' }}>{e.sector}</p>
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--texto-secundario)' }}>
+                          Encargado: {e.encargado}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="text-right">
+                          <p className="text-2xl font-bold leading-none" style={{ color: '#004466' }}>{e.total}</p>
+                          <p className="text-xs" style={{ color: 'var(--texto-secundario)' }}>afiliados</p>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform ${abierto ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'var(--texto-secundario)' }}>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
 
-                {/* Barra de progreso votan vs no votan */}
-                <div>
-                  <div className="flex justify-between text-xs mb-1" style={{ color: 'var(--texto-secundario)' }}>
-                    <span>Votan en Pinula: {e.vota_pinula} ({porcentaje(e.vota_pinula, e.total)}%)</span>
-                    <span>No votan: {e.no_vota}</span>
-                  </div>
-                  <div className="h-2 rounded-full overflow-hidden" style={{ background: '#fee2e2' }}>
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{ width: `${porcentaje(e.vota_pinula, e.total)}%`, background: '#166534' }}
-                    />
-                  </div>
-                </div>
+                    {/* Barra de progreso votan vs no votan */}
+                    <div className="mt-3">
+                      <div className="flex justify-between text-xs mb-1" style={{ color: 'var(--texto-secundario)' }}>
+                        <span>Votan en Pinula: {e.vota_pinula} ({porcentaje(e.vota_pinula, e.total)}%)</span>
+                        <span>No votan: {e.no_vota}</span>
+                      </div>
+                      <div className="h-2 rounded-full overflow-hidden" style={{ background: '#fee2e2' }}>
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${porcentaje(e.vota_pinula, e.total)}%`, background: '#166534' }}
+                        />
+                      </div>
+                    </div>
 
-                {/* Roles */}
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { key: 'simpatizante', label: 'Simpatizante', val: e.simpatizante },
-                    { key: 'organizador', label: 'Organizador', val: e.organizador },
-                    { key: 'guerrero', label: 'Guerrero', val: e.guerrero },
-                    { key: 'lider', label: 'Lider', val: e.lider },
-                    { key: 'templario', label: 'Templario', val: e.templario },
-                  ].filter(r => r.val > 0).map((r) => (
-                    <span key={r.key} className="text-xs font-medium px-2 py-1 rounded-full"
-                      style={{ background: `${colorRol[r.key]}15`, color: colorRol[r.key] }}>
-                      {r.label}: {r.val}
-                    </span>
-                  ))}
+                    {/* Roles */}
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {[
+                        { key: 'simpatizante', label: 'Simpatizante', val: e.simpatizante },
+                        { key: 'organizador', label: 'Organizador', val: e.organizador },
+                        { key: 'guerrero', label: 'Guerrero', val: e.guerrero },
+                        { key: 'lider', label: 'Lider', val: e.lider },
+                        { key: 'templario', label: 'Templario', val: e.templario },
+                      ].filter(r => r.val > 0).map((r) => (
+                        <span key={r.key} className="text-xs font-medium px-2 py-1 rounded-full"
+                          style={{ background: `${colorRol[r.key]}15`, color: colorRol[r.key] }}>
+                          {r.label}: {r.val}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+
+                  {abierto && (
+                    <div className="mt-4 pt-4 border-t space-y-2" style={{ borderColor: 'var(--color-borde)' }}>
+                      <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--texto-secundario)' }}>
+                        Afiliado por
+                      </p>
+                      {e.afiliado_por.length === 0 ? (
+                        <p className="text-sm italic" style={{ color: 'var(--texto-secundario)' }}>Sin registros.</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {e.afiliado_por.map((ap) => (
+                            <div key={ap.nombre} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: '#f8fafc' }}>
+                              <span className="text-xs font-medium" style={{ color: 'var(--texto-principal)' }}>{ap.nombre}</span>
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#e0f7fa', color: '#004466' }}>
+                                {ap.total} afiliado{ap.total !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
           </>
         )}
