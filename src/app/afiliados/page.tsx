@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, type Afiliado, type Perfil, type Sector } from '@/lib/supabase'
+import { TIPOS_UBICACION, OPCIONES_UBICACION, type TipoUbicacion } from '@/lib/ubicaciones'
 import NavBar from '@/components/NavBar'
 
 const colorRol: Record<string, { bg: string; color: string }> = {
@@ -14,9 +15,10 @@ const colorRol: Record<string, { bg: string; color: string }> = {
 }
 
 const ROLES = ['Simpatizante', 'Organizador', 'Guerrero', 'Líder', 'Templario']
+const GENEROS = ['Masculino', 'Femenino']
 
 // Roles que solo ven / filtran por sus propios afiliados
-const ROLES_SOLO_PROPIOS = ['colaborador', 'encargado', 'pentagono', 'templario']
+const ROLES_SOLO_PROPIOS = ['colaborador', 'encargado', 'templario']
 
 // Roles que NO pueden editar afiliados (ni siquiera los propios)
 const ROLES_SIN_EDICION = ['colaborador', 'encargado', 'lider']
@@ -59,6 +61,7 @@ type Draft = {
   genero: string
   rol_afiliado: string
   sector_id: string
+  tipo_ubicacion: string
   nombre_ubicacion: string
   afiliado_por: string
   vota_en_pinula: boolean
@@ -97,6 +100,7 @@ export default function AfiliadosPage() {
   const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [afiliados, setAfiliados] = useState<Afiliado[]>([])
   const [sectoresList, setSectoresList] = useState<Sector[]>([])
+  const [afiliadoPorList, setAfiliadoPorList] = useState<{ id: number; nombre: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [total, setTotal] = useState(0)
@@ -124,6 +128,9 @@ export default function AfiliadosPage() {
 
       const { data: sData } = await supabase.from('sectores').select('*').order('nombre')
       setSectoresList(sData || [])
+
+      const { data: apData } = await supabase.from('afiliado_por').select('*').order('nombre')
+      setAfiliadoPorList(apData || [])
 
       await cargarAfiliados(p?.rol || 'encargado', session.user.id, '', FILTROS_VACIOS, 1)
     }
@@ -368,6 +375,7 @@ export default function AfiliadosPage() {
       genero: a.genero || '',
       rol_afiliado: (a as any).rol_afiliado || 'Simpatizante',
       sector_id: a.sector_id ? String(a.sector_id) : '',
+      tipo_ubicacion: a.tipo_ubicacion || '',
       nombre_ubicacion: a.nombre_ubicacion || '',
       afiliado_por: (a as any).afiliado_por || '',
       vota_en_pinula: a.vota_en_pinula ?? true,
@@ -416,6 +424,7 @@ export default function AfiliadosPage() {
         genero: draft.genero || null,
         rol_afiliado: draft.rol_afiliado,
         sector_id: draft.sector_id ? parseInt(draft.sector_id) : null,
+        tipo_ubicacion: draft.tipo_ubicacion || null,
         nombre_ubicacion: draft.nombre_ubicacion || null,
         afiliado_por: draft.afiliado_por || null,
         vota_en_pinula: draft.vota_en_pinula,
@@ -449,6 +458,10 @@ export default function AfiliadosPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const puedeEditar = !ROLES_SIN_EDICION.includes(perfil?.rol || '')
   const muestraColumnaEncargado = !ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') && perfil?.rol !== 'lider'
+
+  const opcionesUbicacionDraft = draft?.tipo_ubicacion
+    ? OPCIONES_UBICACION[draft.tipo_ubicacion as TipoUbicacion]
+    : []
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-fondo)' }}>
@@ -644,7 +657,10 @@ export default function AfiliadosPage() {
                           </td>
                           <td className="px-3 py-2 text-xs" style={{ color: 'var(--texto-secundario)' }}>{(a as any).edad ?? '—'}</td>
                           <td className="px-3 py-2">
-                            <input className={inputEdicion} style={inputEdicionStyle} value={draft.genero} onChange={(e) => setDraft({ ...draft, genero: e.target.value })} />
+                            <select className={inputEdicion} style={inputEdicionStyle} value={draft.genero} onChange={(e) => setDraft({ ...draft, genero: e.target.value })}>
+                              <option value="">Selecciona...</option>
+                              {GENEROS.map((g) => <option key={g} value={g}>{g}</option>)}
+                            </select>
                           </td>
                           <td className="px-3 py-2">
                             <select className={inputEdicion} style={inputEdicionStyle} value={draft.rol_afiliado} onChange={(e) => setDraft({ ...draft, rol_afiliado: e.target.value })}>
@@ -658,13 +674,45 @@ export default function AfiliadosPage() {
                             </select>
                           </td>
                           <td className="px-3 py-2">
-                            <input className={inputEdicion} style={inputEdicionStyle} value={draft.nombre_ubicacion} onChange={(e) => setDraft({ ...draft, nombre_ubicacion: e.target.value })} />
+                            <div className="flex flex-col gap-1">
+                              <select
+                                className={inputEdicion}
+                                style={inputEdicionStyle}
+                                value={draft.tipo_ubicacion}
+                                onChange={(e) => setDraft({ ...draft, tipo_ubicacion: e.target.value, nombre_ubicacion: '' })}>
+                                <option value="">Tipo...</option>
+                                {TIPOS_UBICACION.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                              </select>
+                              {draft.tipo_ubicacion ? (
+                                opcionesUbicacionDraft.length > 0 ? (
+                                  <select
+                                    className={inputEdicion}
+                                    style={inputEdicionStyle}
+                                    value={draft.nombre_ubicacion}
+                                    onChange={(e) => setDraft({ ...draft, nombre_ubicacion: e.target.value })}>
+                                    <option value="">Selecciona...</option>
+                                    {opcionesUbicacionDraft.map((op) => <option key={op} value={op}>{op}</option>)}
+                                  </select>
+                                ) : (
+                                  <input
+                                    className={inputEdicion}
+                                    style={inputEdicionStyle}
+                                    value={draft.nombre_ubicacion}
+                                    onChange={(e) => setDraft({ ...draft, nombre_ubicacion: e.target.value })}
+                                    placeholder="Nombre..."
+                                  />
+                                )
+                              ) : null}
+                            </div>
                           </td>
                           {muestraColumnaEncargado && (
                             <td className="px-3 py-2 text-xs" style={{ color: 'var(--texto-secundario)' }}>{encargadoSector || '—'}</td>
                           )}
                           <td className="px-3 py-2">
-                            <input className={inputEdicion} style={inputEdicionStyle} value={draft.afiliado_por} onChange={(e) => setDraft({ ...draft, afiliado_por: e.target.value })} />
+                            <select className={inputEdicion} style={inputEdicionStyle} value={draft.afiliado_por} onChange={(e) => setDraft({ ...draft, afiliado_por: e.target.value })}>
+                              <option value="">Selecciona...</option>
+                              {afiliadoPorList.map((ap) => <option key={ap.id} value={ap.nombre}>{ap.nombre}</option>)}
+                            </select>
                           </td>
                           <td className="px-3 py-2">
                             <select className={inputEdicion} style={inputEdicionStyle} value={draft.vota_en_pinula ? 'si' : 'no'} onChange={(e) => setDraft({ ...draft, vota_en_pinula: e.target.value === 'si' })}>
