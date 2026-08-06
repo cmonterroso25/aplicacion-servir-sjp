@@ -21,6 +21,8 @@ type SectorCount = {
 type AfiliadoPorStats = {
   afiliado_por: string
   total: number
+  vota_pinula: number
+  no_vota: number
   sectores: SectorCount[]
   roles: RolCount
 }
@@ -116,6 +118,8 @@ export default function TemplariosPage() {
           mapa[key] = {
             afiliado_por: nombreOriginal, // se ajusta al final con la variante más frecuente
             total: 0,
+            vota_pinula: 0,
+            no_vota: 0,
             sectores: [],
             roles: { lider: 0, guerrero: 0, organizador: 0, simpatizante: 0, otro: 0 }
           }
@@ -125,6 +129,8 @@ export default function TemplariosPage() {
         variantesPorClave[key][nombreOriginal] = (variantesPorClave[key][nombreOriginal] || 0) + 1
 
         mapa[key].total++
+        if (row.vota_en_pinula) mapa[key].vota_pinula++
+        else mapa[key].no_vota++
 
         const sectorExistente = mapa[key].sectores.find(s => s.nombre === sectorNombre)
         if (sectorExistente) {
@@ -157,6 +163,9 @@ export default function TemplariosPage() {
   }
 
   const totalGeneral = stats.reduce((s, e) => s + e.total, 0)
+
+  const porcentaje = (parte: number, total: number) =>
+    total === 0 ? 0 : Math.round((parte / total) * 100)
 
   const ROLES = [
     { key: 'lider',        label: 'Líderes',        color: '#004466', bg: '#e0f7fa' },
@@ -227,6 +236,20 @@ export default function TemplariosPage() {
                     </div>
                     <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background: '#e0f7fa' }}>
                       <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: '#004466' }} />
+                    </div>
+
+                    {/* Barra votan vs no votan en Pinula */}
+                    <div className="mt-3">
+                      <div className="flex justify-between text-xs mb-1" style={{ color: 'var(--texto-secundario)' }}>
+                        <span>Votan en Pinula: {enc.vota_pinula} ({porcentaje(enc.vota_pinula, enc.total)}%)</span>
+                        <span>No votan: {enc.no_vota}</span>
+                      </div>
+                      <div className="h-2 rounded-full overflow-hidden" style={{ background: '#fee2e2' }}>
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${porcentaje(enc.vota_pinula, enc.total)}%`, background: '#166534' }}
+                        />
+                      </div>
                     </div>
                   </button>
 
