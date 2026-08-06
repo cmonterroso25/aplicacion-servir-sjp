@@ -460,7 +460,7 @@ export default function AfiliadosPage() {
   const muestraColumnaEncargado = !ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') && perfil?.rol !== 'lider'
 
   const opcionesUbicacionDraft = draft?.tipo_ubicacion
-    ? OPCIONES_UBICACION[draft.tipo_ubicacion as TipoUbicacion]
+    ? (OPCIONES_UBICACION[draft.tipo_ubicacion as TipoUbicacion] || [])
     : []
 
   return (
