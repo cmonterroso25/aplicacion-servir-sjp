@@ -24,7 +24,15 @@ type EstadisticaSector = {
   afiliado_por: AfiliadoPorCount[]
 }
 
+type EstadisticaLegalSector = {
+  sector: string
+  total: number
+  vinculados: number
+  pendientes: number
+}
+
 const ROLES_SIN_ACCESO = ['lider', 'colaborador', 'templario']
+const ROLES_LEGALES = ['admin', 'pentagono']
 
 // ──────────────────────────────────────────────────────────────
 // Normalización de nombres (mismo criterio que en /templarios)
@@ -50,6 +58,12 @@ export default function EstadisticasPage() {
   const [errorCarga, setErrorCarga] = useState('')
   const [expandido, setExpandido] = useState<string | null>(null)
 
+  // Afiliados legales (TSE)
+  const [legalesTotales, setLegalesTotales] = useState({ total: 0, vinculados: 0, pendientes: 0 })
+  const [legalesPorSector, setLegalesPorSector] = useState<EstadisticaLegalSector[]>([])
+  const [loadingLegales, setLoadingLegales] = useState(true)
+  const [mostrarLegales, setMostrarLegales] = useState(false)
+
   useEffect(() => {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -60,6 +74,13 @@ export default function EstadisticasPage() {
         if (ROLES_SIN_ACCESO.includes(p.rol)) { router.replace('/afiliados'); return }
         setPerfil(p)
         await cargarEstadisticas(p.rol, session.user.id)
+
+        if (ROLES_LEGALES.includes(p.rol)) {
+          setMostrarLegales(true)
+          await cargarEstadisticasLegales()
+        } else {
+          setLoadingLegales(false)
+        }
       }
     }
     init()
@@ -69,10 +90,6 @@ export default function EstadisticasPage() {
     setLoading(true)
     setErrorCarga('')
     try {
-      // Traer los encargados reales por sector desde sectores_encargados
-      // (un sector puede tener mas de un encargado).
-      // Si este query falla (ej. permisos), seguimos sin encargados en vez
-      // de tumbar toda la pagina.
       const encargadosPorSector: Record<number, string[]> = {}
       try {
         const { data: encargadosData, error: encargadosError } = await supabase
@@ -96,8 +113,6 @@ export default function EstadisticasPage() {
         console.error('Excepcion cargando sectores_encargados:', e)
       }
 
-      // Traer TODAS las filas paginando de 1000 en 1000
-      // (Supabase/PostgREST limita cada respuesta a 1000 filas por defecto)
       let allData: any[] = []
       let from = 0
       const pageSize = 1000
@@ -129,9 +144,6 @@ export default function EstadisticasPage() {
 
       if (!data) return
 
-      // Agrupar por sector. Los "afiliado por" se agrupan por clave
-      // normalizada (sin tildes/mayúsculas) para fusionar variantes del
-      // mismo nombre; se muestra la variante más frecuente encontrada.
       const mapa: Record<string, EstadisticaSector> = {}
       const afiliadoPorVariantes: Record<string, Record<string, Record<string, number>>> = {}
       const afiliadoPorTotales: Record<string, Record<string, number>> = {}
@@ -164,9 +176,6 @@ export default function EstadisticasPage() {
         if (a.vota_en_pinula) mapa[key].vota_pinula++
         else mapa[key].no_vota++
 
-        // Comparación de rol sin tildes/mayúsculas: los roles se guardan
-        // como 'Líder', 'Guerrero', etc. y sin esto "Líder" nunca
-        // coincidía con 'lider'.
         const rol_a = normalizarClave(a.rol_afiliado || 'Simpatizante')
         if (rol_a === 'simpatizante') mapa[key].simpatizante++
         else if (rol_a === 'organizador') mapa[key].organizador++
@@ -183,8 +192,6 @@ export default function EstadisticasPage() {
           (afiliadoPorVariantes[key][afiliadoPorKey][afiliadoPorOriginal] || 0) + 1
       })
 
-      // Resolver, para cada sector y cada clave normalizada, la variante
-      // de nombre más frecuente para mostrarla.
       for (const sectorKey of Object.keys(mapa)) {
         const totalesSector = afiliadoPorTotales[sectorKey]
         const variantesSector = afiliadoPorVariantes[sectorKey]
@@ -207,6 +214,56 @@ export default function EstadisticasPage() {
       setErrorCarga(e?.message || 'Ocurrio un error al cargar las estadisticas')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const cargarEstadisticasLegales = async () => {
+    setLoadingLegales(true)
+    try {
+      let allData: any[] = []
+      let from = 0
+      const pageSize = 1000
+      let hasMore = true
+
+      while (hasMore) {
+        const { data: pageData, error } = await supabase
+          .from('afiliados_legales')
+          .select('sector_id, vinculado, sectores(nombre)')
+          .range(from, from + pageSize - 1)
+
+        if (error) {
+          console.error('Error cargando afiliados_legales:', error.message)
+          hasMore = false
+          break
+        }
+        if (!pageData || pageData.length === 0) { hasMore = false; break }
+
+        allData = allData.concat(pageData)
+        if (pageData.length < pageSize) hasMore = false
+        from += pageSize
+      }
+
+      const mapa: Record<string, EstadisticaLegalSector> = {}
+      allData.forEach((a: any) => {
+        const sectorNombre = a.sectores?.nombre || 'Sin sector'
+        if (!mapa[sectorNombre]) {
+          mapa[sectorNombre] = { sector: sectorNombre, total: 0, vinculados: 0, pendientes: 0 }
+        }
+        mapa[sectorNombre].total++
+        if (a.vinculado) mapa[sectorNombre].vinculados++
+        else mapa[sectorNombre].pendientes++
+      })
+
+      const lista = Object.values(mapa).sort((a, b) => b.total - a.total)
+      setLegalesPorSector(lista)
+
+      const total = allData.length
+      const vinculados = allData.filter((a: any) => a.vinculado).length
+      setLegalesTotales({ total, vinculados, pendientes: total - vinculados })
+    } catch (e) {
+      console.error('Excepcion cargando estadisticas legales:', e)
+    } finally {
+      setLoadingLegales(false)
     }
   }
 
@@ -375,6 +432,74 @@ export default function EstadisticasPage() {
             })}
           </div>
           </>
+        )}
+
+        {/* ────────────────────────────────────────────────────────── */}
+        {/* Afiliados legales (TSE) — solo visible para admin/pentagono */}
+        {/* ────────────────────────────────────────────────────────── */}
+        {mostrarLegales && (
+          <div className="space-y-5 pt-2">
+            <h2 className="font-semibold text-sm" style={{ color: 'var(--texto-principal)' }}>
+              Afiliados legales (TSE)
+            </h2>
+
+            {/* Tarjetas resumen */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="card text-center">
+                <p className="text-3xl font-bold" style={{ color: '#004466' }}>{legalesTotales.total}</p>
+                <p className="text-xs mt-1 font-medium" style={{ color: 'var(--texto-secundario)' }}>Total afiliados legales</p>
+              </div>
+              <div className="card text-center">
+                <p className="text-3xl font-bold text-green-600">{legalesTotales.vinculados}</p>
+                <p className="text-xs mt-1 font-medium" style={{ color: 'var(--texto-secundario)' }}>Vinculados</p>
+              </div>
+              <div className="card text-center">
+                <p className="text-3xl font-bold" style={{ color: '#92400e' }}>{legalesTotales.pendientes}</p>
+                <p className="text-xs mt-1 font-medium" style={{ color: 'var(--texto-secundario)' }}>Pendientes de vincular</p>
+              </div>
+            </div>
+
+            {loadingLegales ? (
+              <div className="card text-center py-10">
+                <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto" style={{ borderColor: '#004466' }}></div>
+              </div>
+            ) : legalesPorSector.length === 0 ? (
+              <div className="card text-center py-10">
+                <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>No hay datos todavia</p>
+              </div>
+            ) : (
+              <div className="card space-y-4">
+                <h3 className="font-semibold text-sm" style={{ color: 'var(--texto-principal)' }}>
+                  Vinculados por sector
+                </h3>
+                <div className="space-y-2.5">
+                  {legalesPorSector.filter((e) => e.sector !== 'Sin sector').map((e) => {
+                    const max = Math.max(...legalesPorSector.filter((s) => s.sector !== 'Sin sector').map((s) => s.vinculados), 1)
+                    const ancho = Math.max((e.vinculados / max) * 100, 6)
+                    return (
+                      <div key={e.sector} className="flex items-center gap-3">
+                        <p
+                          className="text-xs font-medium w-28 sm:w-40 flex-shrink-0 text-right leading-tight"
+                          style={{ color: 'var(--texto-secundario)' }}
+                          title={e.sector}
+                        >
+                          {e.sector}
+                        </p>
+                        <div className="flex-1 h-5 rounded-md overflow-hidden" style={{ background: '#f0f6f9' }}>
+                          <div
+                            className="h-full rounded-md flex items-center justify-end px-2 transition-all"
+                            style={{ width: `${ancho}%`, background: '#166534', minWidth: '1.75rem' }}
+                          >
+                            <span className="text-xs font-semibold text-white">{e.vinculados}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </main>
     </div>

@@ -114,3 +114,41 @@ export type Configuracion = {
   valor: string | null
   updated_at: string | null
 }
+export type AfiliadoLegal = {
+  id: number
+  dpi: string
+  boleta: string | null
+  cedula: string | null
+  nombre_completo: string
+  fecha_afiliacion_legal: string | null
+  primer_apellido: string | null
+  segundo_apellido: string | null
+  primer_nombre: string | null
+  segundo_nombre: string | null
+  telefono: string | null
+  fecha_nacimiento: string | null
+  sector_id: number | null
+  encargado_id: string | null
+  tipo_ubicacion: string | null
+  nombre_ubicacion: string | null
+  vota_en_pinula: boolean | null
+  genero: string | null
+  edad: string | null
+  afiliado_por: string | null
+  rol_afiliado: string | null
+  direccion: string | null
+  afiliado_id: number | null
+  vinculado: boolean
+  created_at: string | null
+}
+
+export type AfiliadoLegalConRelacion = AfiliadoLegal & {
+  afiliados: {
+    id: number
+    primer_apellido: string
+    segundo_apellido: string | null
+    primer_nombre: string
+    segundo_nombre: string | null
+    dpi: string | null
+  } | null
+}
