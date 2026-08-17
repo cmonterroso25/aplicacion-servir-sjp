@@ -27,6 +27,13 @@ type AfiliadoPorStats = {
   roles: RolCount
 }
 
+type EstadisticaLegalTemplario = {
+  afiliado_por: string
+  total: number
+  vinculados: number
+  pendientes: number
+}
+
 // ──────────────────────────────────────────────────────────────
 // Normalización de nombres de templarios
 // ──────────────────────────────────────────────────────────────
@@ -63,6 +70,11 @@ export default function TemplariosPage() {
   const [loading, setLoading] = useState(true)
   const [expandido, setExpandido] = useState<string | null>(null)
 
+  // Afiliados legales (TSE) por templario
+  const [statsLegales, setStatsLegales] = useState<EstadisticaLegalTemplario[]>([])
+  const [totalesLegales, setTotalesLegales] = useState({ total: 0, vinculados: 0, pendientes: 0 })
+  const [loadingLegales, setLoadingLegales] = useState(true)
+
   useEffect(() => {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -72,6 +84,7 @@ export default function TemplariosPage() {
         if (p.rol !== 'admin' && p.rol !== 'pentagono') { router.replace('/afiliados'); return }
         setPerfil(p)
         await cargarStats()
+        await cargarStatsLegales()
       }
     }
     init()
@@ -159,6 +172,68 @@ export default function TemplariosPage() {
       console.error(e)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const cargarStatsLegales = async () => {
+    setLoadingLegales(true)
+    try {
+      // Traer TODAS las filas de afiliados_legales paginando de 1000 en 1000
+      let allRows: any[] = []
+      let from = 0
+      const pageSize = 1000
+      let hasMore = true
+
+      while (hasMore) {
+        const { data: page, error } = await supabase
+          .from('afiliados_legales')
+          .select('afiliado_por, vinculado')
+          .range(from, from + pageSize - 1)
+
+        if (error) throw error
+        if (!page || page.length === 0) { hasMore = false; break }
+
+        allRows = allRows.concat(page)
+        if (page.length < pageSize) hasMore = false
+        from += pageSize
+      }
+
+      // mismo criterio de normalización/alias que usamos arriba para afiliados
+      const mapa: Record<string, EstadisticaLegalTemplario> = {}
+      const variantesPorClave: Record<string, Record<string, number>> = {}
+
+      for (const row of allRows) {
+        const nombreOriginal = (row.afiliado_por as string) || 'Sin registrar'
+        const key = claveFinal(nombreOriginal)
+
+        if (!mapa[key]) {
+          mapa[key] = { afiliado_por: nombreOriginal, total: 0, vinculados: 0, pendientes: 0 }
+          variantesPorClave[key] = {}
+        }
+
+        variantesPorClave[key][nombreOriginal] = (variantesPorClave[key][nombreOriginal] || 0) + 1
+
+        mapa[key].total++
+        if (row.vinculado) mapa[key].vinculados++
+        else mapa[key].pendientes++
+      }
+
+      for (const key of Object.keys(mapa)) {
+        const variantes = variantesPorClave[key]
+        const nombreMasFrecuente = Object.entries(variantes).sort((a, b) => b[1] - a[1])[0][0]
+        mapa[key].afiliado_por = nombreMasFrecuente
+      }
+
+      const resultado = Object.values(mapa).sort((a, b) => b.total - a.total)
+      setStatsLegales(resultado)
+
+      const total = allRows.length
+      const vinculados = allRows.filter((r) => r.vinculado).length
+      setTotalesLegales({ total, vinculados, pendientes: total - vinculados })
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoadingLegales(false)
     }
   }
 
@@ -295,6 +370,71 @@ export default function TemplariosPage() {
             })}
           </div>
         )}
+
+        {/* ────────────────────────────────────────────────────────── */}
+        {/* Afiliados legales (TSE) por templario */}
+        {/* ────────────────────────────────────────────────────────── */}
+        <div className="space-y-5 pt-2">
+          <h2 className="font-semibold text-sm" style={{ color: 'var(--texto-principal)' }}>
+            Afiliados legales (TSE) por templario
+          </h2>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="card text-center">
+              <p className="text-3xl font-bold" style={{ color: '#004466' }}>{totalesLegales.total}</p>
+              <p className="text-xs mt-1 font-medium" style={{ color: 'var(--texto-secundario)' }}>Total afiliados legales</p>
+            </div>
+            <div className="card text-center">
+              <p className="text-3xl font-bold text-green-600">{totalesLegales.vinculados}</p>
+              <p className="text-xs mt-1 font-medium" style={{ color: 'var(--texto-secundario)' }}>Vinculados</p>
+            </div>
+            <div className="card text-center">
+              <p className="text-3xl font-bold" style={{ color: '#92400e' }}>{totalesLegales.pendientes}</p>
+              <p className="text-xs mt-1 font-medium" style={{ color: 'var(--texto-secundario)' }}>Pendientes de vincular</p>
+            </div>
+          </div>
+
+          {loadingLegales ? (
+            <div className="card text-center py-10">
+              <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto" style={{ borderColor: '#004466' }}></div>
+            </div>
+          ) : statsLegales.length === 0 ? (
+            <div className="card text-center py-10">
+              <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>No hay datos todavia</p>
+            </div>
+          ) : (
+            <div className="card space-y-4">
+              <h3 className="font-semibold text-sm" style={{ color: 'var(--texto-principal)' }}>
+                Vinculados por templario
+              </h3>
+              <div className="space-y-2.5">
+                {statsLegales.filter((e) => e.afiliado_por !== 'Sin registrar').map((e) => {
+                  const max = Math.max(...statsLegales.filter((s) => s.afiliado_por !== 'Sin registrar').map((s) => s.vinculados), 1)
+                  const ancho = Math.max((e.vinculados / max) * 100, 6)
+                  return (
+                    <div key={e.afiliado_por} className="flex items-center gap-3">
+                      <p
+                        className="text-xs font-medium w-28 sm:w-40 flex-shrink-0 text-right leading-tight"
+                        style={{ color: 'var(--texto-secundario)' }}
+                        title={e.afiliado_por}
+                      >
+                        {e.afiliado_por}
+                      </p>
+                      <div className="flex-1 h-5 rounded-md overflow-hidden" style={{ background: '#f0f6f9' }}>
+                        <div
+                          className="h-full rounded-md flex items-center justify-end px-2 transition-all"
+                          style={{ width: `${ancho}%`, background: '#166534', minWidth: '1.75rem' }}
+                        >
+                          <span className="text-xs font-semibold text-white">{e.vinculados}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       </main>
     </div>
   )
