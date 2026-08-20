@@ -141,7 +141,6 @@ export type AfiliadoLegal = {
   vinculado: boolean
   created_at: string | null
 }
-
 export type AfiliadoLegalConRelacion = AfiliadoLegal & {
   afiliados: {
     id: number
@@ -151,4 +150,64 @@ export type AfiliadoLegalConRelacion = AfiliadoLegal & {
     segundo_nombre: string | null
     dpi: string | null
   } | null
+}
+
+// ============================================
+// MÓDULO DE INVENTARIO
+// ============================================
+export type InventarioProducto = {
+  id: number
+  nombre: string
+  categoria: string | null
+  unidad_medida: string | null
+  costo_unitario: number
+  activo: boolean
+  created_at: string | null
+}
+export type InventarioIngreso = {
+  id: number
+  producto_id: number
+  cantidad: number
+  costo_unitario: number
+  proveedor: string | null
+  notas: string | null
+  fecha: string
+  creado_por: string | null
+  created_at: string | null
+  inventario_productos?: { nombre: string; unidad_medida: string | null } | null
+}
+export type InventarioEntrega = {
+  id: number
+  producto_id: number
+  perfil_id: string
+  cantidad: number
+  costo_unitario: number
+  cantidad_devuelta: number
+  reunion_id: number | null
+  fecha: string
+  entregado_por: string | null
+  notas: string | null
+  created_at: string | null
+  inventario_productos?: { nombre: string; unidad_medida: string | null } | null
+  perfiles?: { nombre_completo: string | null; email: string } | null
+  reuniones?: { titulo: string } | null
+}
+export type InventarioStockActual = {
+  producto_id: number
+  nombre: string
+  categoria: string | null
+  unidad_medida: string | null
+  costo_unitario: number
+  activo: boolean
+  total_ingresado: number
+  total_entregado_neto: number
+  stock_actual: number
+}
+export type InventarioCostoPorColaborador = {
+  perfil_id: string
+  nombre_completo: string | null
+  costo_neto_entregado: number
+  costo_bruto_entregado: number
+  costo_devuelto: number
+  num_entregas: number
 }

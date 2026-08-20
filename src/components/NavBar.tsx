@@ -46,6 +46,13 @@ export default function NavBar({ rol }: Props) {
       )
     },
     {
+      label: 'Inventario', href: '/inventario', icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+        </svg>
+      )
+    },
+    {
       label: 'Templarios', href: '/templarios', icon: (
         <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -86,6 +93,8 @@ export default function NavBar({ rol }: Props) {
 
   // Tabs exclusivas de admin y pentagono (dentro de la fila de scroll)
   const TABS_ADMIN_PENTAGONO = ['/linea-tiempo', '/afiliados-legales']
+  // Tabs exclusivas de admin unicamente
+  const TABS_SOLO_ADMIN = ['/inventario']
 
   // Mientras el rol no se ha determinado (carga inicial de sesion/perfil),
   // no mostramos ningun tab para evitar un "flash" con todas las opciones
@@ -100,7 +109,11 @@ export default function NavBar({ rol }: Props) {
     ? tabsCompletos.filter((t) => t.href === '/afiliados')
     : ROLES_CONSULTA_Y_AFILIADOS.includes(rol)
     ? tabsCompletos.filter((t) => t.href === '/consulta' || t.href === '/afiliados')
-    : tabsCompletos.filter((t) => !TABS_ADMIN_PENTAGONO.includes(t.href) || rol === 'admin' || rol === 'pentagono')
+    : tabsCompletos.filter((t) => {
+        if (TABS_SOLO_ADMIN.includes(t.href)) return rol === 'admin'
+        if (TABS_ADMIN_PENTAGONO.includes(t.href)) return rol === 'admin' || rol === 'pentagono'
+        return true
+      })
 
   // Reportes y Secretarías ahora viven en la fila superior, junto a Admin/Salir
   const puedeVerReportes = rolDefinido && !ROLES_RESTRINGIDOS.includes(rol)
