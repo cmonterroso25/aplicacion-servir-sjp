@@ -187,6 +187,7 @@ export type InventarioEntrega = {
   fecha: string
   entregado_por: string | null
   notas: string | null
+  foto_url: string | null
   created_at: string | null
   inventario_productos?: { nombre: string; unidad_medida: string | null } | null
   perfiles?: { nombre_completo: string | null; email: string } | null

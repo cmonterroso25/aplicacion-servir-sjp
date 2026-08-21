@@ -13,6 +13,7 @@ import {
   type InventarioCostoPorColaborador,
 } from '@/lib/supabase'
 import NavBar from '@/components/NavBar'
+import WebcamCapture from '@/components/WebcamCapture'
 
 type Vista = 'stock' | 'ingresos' | 'entregas' | 'reporte'
 
@@ -62,6 +63,10 @@ export default function InventarioPage() {
   const [formEntrega, setFormEntrega] = useState({ producto_id: '', perfil_id: '', cantidad: '', costo_unitario: '', reunion_id: '', notas: '', fecha: hoyISO() })
   const [guardandoEntrega, setGuardandoEntrega] = useState(false)
 
+  // ── Foto de entrega (webcam / R2) ────────────────────────────
+  const [mostrarWebcam, setMostrarWebcam] = useState(false)
+  const [fotoEntregaUrl, setFotoEntregaUrl] = useState<string | null>(null)
+
   const [devoluciones, setDevoluciones] = useState<Record<number, string>>({})
   const [guardandoDevolucion, setGuardandoDevolucion] = useState<number | null>(null)
   const [mostrarDevolucionId, setMostrarDevolucionId] = useState<number | null>(null)
@@ -94,9 +99,6 @@ export default function InventarioPage() {
         supabase.from('inventario_productos').select('*').order('nombre'),
         supabase.from('inventario_stock_actual').select('*').order('nombre'),
         supabase.from('inventario_ingresos').select('*, inventario_productos!left(nombre, unidad_medida)').order('fecha', { ascending: false }).order('id', { ascending: false }).limit(200),
-        // FIX: inventario_entregas tiene DOS FKs hacia perfiles (perfil_id y entregado_por).
-        // Sin especificar cuál usar, PostgREST devuelve un error de relación ambigua
-        // y la query completa falla (por eso la entrega no aparecía, aunque sí existía en la BD).
         supabase.from('inventario_entregas').select('*, inventario_productos!left(nombre, unidad_medida), perfiles!perfil_id!left(nombre_completo, email), reuniones!left(titulo)').order('fecha', { ascending: false }).order('id', { ascending: false }).limit(200),
         supabase.from('inventario_costo_por_colaborador').select('*').order('costo_neto_entregado', { ascending: false }),
         supabase.from('perfiles').select('*').order('nombre_completo'),
@@ -267,10 +269,13 @@ export default function InventarioPage() {
       notas: formEntrega.notas.trim() || null,
       fecha: formEntrega.fecha,
       entregado_por: perfil?.id,
+      foto_url: fotoEntregaUrl,
     })
     setGuardandoEntrega(false)
     if (err) { setError('Error al registrar la entrega: ' + err.message); return }
     setFormEntrega({ producto_id: '', perfil_id: '', cantidad: '', costo_unitario: '', reunion_id: '', notas: '', fecha: hoyISO() })
+    setFotoEntregaUrl(null)
+    setMostrarWebcam(false)
     setMostrarFormEntrega(false)
     await cargarTodo()
   }
@@ -652,6 +657,38 @@ export default function InventarioPage() {
                   <input className={inputField} type="date" value={formEntrega.fecha} onChange={(e) => setFormEntrega({ ...formEntrega, fecha: e.target.value })} />
                   <input className={inputField} placeholder="Notas (opcional)" value={formEntrega.notas} onChange={(e) => setFormEntrega({ ...formEntrega, notas: e.target.value })} />
                 </div>
+
+                <div>
+                  <p className="text-xs font-semibold mb-1" style={{ color: 'var(--texto-principal)' }}>Foto (opcional)</p>
+                  {!mostrarWebcam && !fotoEntregaUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setMostrarWebcam(true)}
+                      className="text-xs px-3 py-1.5 rounded-lg font-semibold border"
+                      style={{ borderColor: 'var(--color-borde)', color: '#004466' }}>
+                      Tomar foto con webcam
+                    </button>
+                  )}
+                  {mostrarWebcam && !fotoEntregaUrl && (
+                    <WebcamCapture
+                      onCaptured={(url) => { setFotoEntregaUrl(url); setMostrarWebcam(false) }}
+                      onCancel={() => setMostrarWebcam(false)}
+                    />
+                  )}
+                  {fotoEntregaUrl && (
+                    <div className="flex items-center gap-2">
+                      <img src={fotoEntregaUrl} alt="Foto de la entrega" className="w-20 h-20 object-cover rounded-lg border" style={{ borderColor: 'var(--color-borde)' }} />
+                      <button
+                        type="button"
+                        onClick={() => { setFotoEntregaUrl(null); setMostrarWebcam(false) }}
+                        className="text-xs px-3 py-1.5 rounded-lg font-semibold border"
+                        style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                        Quitar foto
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 <button onClick={crearEntrega} disabled={guardandoEntrega} className="text-sm px-4 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50" style={{ background: '#166534' }}>
                   {guardandoEntrega ? 'Guardando...' : 'Guardar entrega'}
                 </button>
@@ -666,6 +703,7 @@ export default function InventarioPage() {
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Producto</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Colaborador</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Actividad</th>
+                    <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Foto</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Entregado</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Devuelto</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Neto</th>
@@ -676,7 +714,7 @@ export default function InventarioPage() {
                 </thead>
                 <tbody>
                   {entregas.length === 0 ? (
-                    <tr><td colSpan={10} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>Todavía no hay entregas registradas.</td></tr>
+                    <tr><td colSpan={11} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>Todavía no hay entregas registradas.</td></tr>
                   ) : (
                     entregas.map((e, idx) => {
                       const neto = e.cantidad - e.cantidad_devuelta
@@ -690,6 +728,15 @@ export default function InventarioPage() {
                             <td className="px-3 py-2.5 whitespace-nowrap font-semibold" style={{ color: 'var(--texto-principal)' }}>{e.inventario_productos?.nombre || '—'}</td>
                             <td className="px-3 py-2.5 whitespace-nowrap">{e.perfiles?.nombre_completo || e.perfiles?.email || '—'}</td>
                             <td className="px-3 py-2.5 whitespace-nowrap">{e.reuniones?.titulo || '—'}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              {e.foto_url ? (
+                                <a href={e.foto_url} target="_blank" rel="noopener noreferrer">
+                                  <img src={e.foto_url} alt="Foto de la entrega" className="w-10 h-10 object-cover rounded-lg border" style={{ borderColor: 'var(--color-borde)' }} />
+                                </a>
+                              ) : (
+                                <span style={{ color: 'var(--texto-secundario)' }}>—</span>
+                              )}
+                            </td>
                             <td className="px-3 py-2.5 whitespace-nowrap">{e.cantidad}</td>
                             <td className="px-3 py-2.5 whitespace-nowrap">{e.cantidad_devuelta}</td>
                             <td className="px-3 py-2.5 whitespace-nowrap font-semibold">{neto}</td>
@@ -720,7 +767,7 @@ export default function InventarioPage() {
 
                           {mostrandoDevolucion && (
                             <tr style={{ background: '#f0f6f9' }}>
-                              <td colSpan={10} className="px-3 py-3">
+                              <td colSpan={11} className="px-3 py-3">
                                 <div className="flex items-center gap-2">
                                   <p className="text-xs font-medium" style={{ color: 'var(--texto-secundario)' }}>
                                     Cantidad a devolver (máx. {disponible}):
@@ -754,7 +801,7 @@ export default function InventarioPage() {
 
                           {editando && (
                             <tr style={{ background: '#f0f6f9' }}>
-                              <td colSpan={10} className="px-3 py-3">
+                              <td colSpan={11} className="px-3 py-3">
                                 <div className="space-y-2">
                                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                     <select className={inputField} value={draftEntrega.producto_id} onChange={(e2) => setDraftEntrega({ ...draftEntrega, producto_id: e2.target.value })}>
