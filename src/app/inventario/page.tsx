@@ -83,22 +83,32 @@ export default function InventarioPage() {
     setLoading(true)
     try {
       const [
-        { data: prodData },
-        { data: stockData },
-        { data: ingData },
-        { data: entData },
-        { data: repData },
-        { data: colData },
-        { data: reuData },
+        { data: prodData, error: errProd },
+        { data: stockData, error: errStock },
+        { data: ingData, error: errIng },
+        { data: entData, error: errEnt },
+        { data: repData, error: errRep },
+        { data: colData, error: errCol },
+        { data: reuData, error: errReu },
       ] = await Promise.all([
         supabase.from('inventario_productos').select('*').order('nombre'),
         supabase.from('inventario_stock_actual').select('*').order('nombre'),
         supabase.from('inventario_ingresos').select('*, inventario_productos!left(nombre, unidad_medida)').order('fecha', { ascending: false }).order('id', { ascending: false }).limit(200),
-        supabase.from('inventario_entregas').select('*, inventario_productos!left(nombre, unidad_medida), perfiles!left(nombre_completo, email), reuniones!left(titulo)').order('fecha', { ascending: false }).order('id', { ascending: false }).limit(200),
+        // FIX: inventario_entregas tiene DOS FKs hacia perfiles (perfil_id y entregado_por).
+        // Sin especificar cuál usar, PostgREST devuelve un error de relación ambigua
+        // y la query completa falla (por eso la entrega no aparecía, aunque sí existía en la BD).
+        supabase.from('inventario_entregas').select('*, inventario_productos!left(nombre, unidad_medida), perfiles!perfil_id!left(nombre_completo, email), reuniones!left(titulo)').order('fecha', { ascending: false }).order('id', { ascending: false }).limit(200),
         supabase.from('inventario_costo_por_colaborador').select('*').order('costo_neto_entregado', { ascending: false }),
         supabase.from('perfiles').select('*').order('nombre_completo'),
         supabase.from('reuniones').select('*').order('fecha', { ascending: false }).limit(100),
       ])
+
+      const primerError = errProd || errStock || errIng || errEnt || errRep || errCol || errReu
+      if (primerError) {
+        console.error('Error cargando datos de inventario:', primerError)
+        setError('Error al cargar datos: ' + primerError.message)
+      }
+
       setProductos(prodData || [])
       setStock(stockData || [])
       setIngresos((ingData as any) || [])
