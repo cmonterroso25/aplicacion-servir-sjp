@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   supabase,
@@ -64,6 +64,20 @@ export default function InventarioPage() {
 
   const [devoluciones, setDevoluciones] = useState<Record<number, string>>({})
   const [guardandoDevolucion, setGuardandoDevolucion] = useState<number | null>(null)
+  const [mostrarDevolucionId, setMostrarDevolucionId] = useState<number | null>(null)
+
+  // ── Edición ──────────────────────────────────────────────────
+  const [editandoProductoId, setEditandoProductoId] = useState<number | null>(null)
+  const [draftProducto, setDraftProducto] = useState({ nombre: '', categoria: '', unidad_medida: '', costo_unitario: '' })
+  const [guardandoEdicionProducto, setGuardandoEdicionProducto] = useState(false)
+
+  const [editandoIngresoId, setEditandoIngresoId] = useState<number | null>(null)
+  const [draftIngreso, setDraftIngreso] = useState({ producto_id: '', cantidad: '', costo_unitario: '', proveedor: '', notas: '', fecha: '' })
+  const [guardandoEdicionIngreso, setGuardandoEdicionIngreso] = useState(false)
+
+  const [editandoEntregaId, setEditandoEntregaId] = useState<number | null>(null)
+  const [draftEntrega, setDraftEntrega] = useState({ producto_id: '', perfil_id: '', cantidad: '', costo_unitario: '', reunion_id: '', notas: '', fecha: '' })
+  const [guardandoEdicionEntrega, setGuardandoEdicionEntrega] = useState(false)
 
   const cargarTodo = useCallback(async () => {
     setLoading(true)
@@ -79,8 +93,8 @@ export default function InventarioPage() {
       ] = await Promise.all([
         supabase.from('inventario_productos').select('*').order('nombre'),
         supabase.from('inventario_stock_actual').select('*').order('nombre'),
-        supabase.from('inventario_ingresos').select('*, inventario_productos(nombre, unidad_medida)').order('fecha', { ascending: false }).order('id', { ascending: false }).limit(200),
-        supabase.from('inventario_entregas').select('*, inventario_productos(nombre, unidad_medida), perfiles(nombre_completo, email), reuniones(titulo)').order('fecha', { ascending: false }).order('id', { ascending: false }).limit(200),
+        supabase.from('inventario_ingresos').select('*, inventario_productos!left(nombre, unidad_medida)').order('fecha', { ascending: false }).order('id', { ascending: false }).limit(200),
+        supabase.from('inventario_entregas').select('*, inventario_productos!left(nombre, unidad_medida), perfiles!left(nombre_completo, email), reuniones!left(titulo)').order('fecha', { ascending: false }).order('id', { ascending: false }).limit(200),
         supabase.from('inventario_costo_por_colaborador').select('*').order('costo_neto_entregado', { ascending: false }),
         supabase.from('perfiles').select('*').order('nombre_completo'),
         supabase.from('reuniones').select('*').order('fecha', { ascending: false }).limit(100),
@@ -133,6 +147,34 @@ export default function InventarioPage() {
     await cargarTodo()
   }
 
+  // ── Edición de producto ─────────────────────────────────────
+  const iniciarEdicionProducto = (p: InventarioProducto) => {
+    setEditandoProductoId(p.id)
+    setDraftProducto({
+      nombre: p.nombre || '',
+      categoria: p.categoria || '',
+      unidad_medida: p.unidad_medida || '',
+      costo_unitario: String(p.costo_unitario ?? ''),
+    })
+  }
+  const cancelarEdicionProducto = () => setEditandoProductoId(null)
+  const guardarEdicionProducto = async () => {
+    if (editandoProductoId == null) return
+    setError('')
+    if (!draftProducto.nombre.trim()) { setError('El nombre del producto es obligatorio.'); return }
+    setGuardandoEdicionProducto(true)
+    const { error: err } = await supabase.from('inventario_productos').update({
+      nombre: draftProducto.nombre.trim(),
+      categoria: draftProducto.categoria.trim() || null,
+      unidad_medida: draftProducto.unidad_medida.trim() || null,
+      costo_unitario: parseFloat(draftProducto.costo_unitario || '0') || 0,
+    }).eq('id', editandoProductoId)
+    setGuardandoEdicionProducto(false)
+    if (err) { setError('Error al editar el producto: ' + err.message); return }
+    setEditandoProductoId(null)
+    await cargarTodo()
+  }
+
   const handleProductoIngresoChange = (id: string) => {
     const prod = productos.find((p) => String(p.id) === id)
     setFormIngreso((prev) => ({ ...prev, producto_id: id, costo_unitario: prod ? String(prod.costo_unitario) : prev.costo_unitario }))
@@ -157,6 +199,40 @@ export default function InventarioPage() {
     if (err) { setError('Error al registrar el ingreso: ' + err.message); return }
     setFormIngreso({ producto_id: '', cantidad: '', costo_unitario: '', proveedor: '', notas: '', fecha: hoyISO() })
     setMostrarFormIngreso(false)
+    await cargarTodo()
+  }
+
+  // ── Edición de ingreso ──────────────────────────────────────
+  const iniciarEdicionIngreso = (ing: InventarioIngreso) => {
+    setEditandoIngresoId(ing.id)
+    setDraftIngreso({
+      producto_id: String(ing.producto_id),
+      cantidad: String(ing.cantidad ?? ''),
+      costo_unitario: String(ing.costo_unitario ?? ''),
+      proveedor: ing.proveedor || '',
+      notas: ing.notas || '',
+      fecha: ing.fecha || hoyISO(),
+    })
+  }
+  const cancelarEdicionIngreso = () => setEditandoIngresoId(null)
+  const guardarEdicionIngreso = async () => {
+    if (editandoIngresoId == null) return
+    setError('')
+    if (!draftIngreso.producto_id) { setError('Selecciona un producto.'); return }
+    const cantidad = parseFloat(draftIngreso.cantidad)
+    if (!cantidad || cantidad <= 0) { setError('La cantidad debe ser mayor a 0.'); return }
+    setGuardandoEdicionIngreso(true)
+    const { error: err } = await supabase.from('inventario_ingresos').update({
+      producto_id: parseInt(draftIngreso.producto_id),
+      cantidad,
+      costo_unitario: parseFloat(draftIngreso.costo_unitario || '0') || 0,
+      proveedor: draftIngreso.proveedor.trim() || null,
+      notas: draftIngreso.notas.trim() || null,
+      fecha: draftIngreso.fecha,
+    }).eq('id', editandoIngresoId)
+    setGuardandoEdicionIngreso(false)
+    if (err) { setError('Error al editar el ingreso: ' + err.message); return }
+    setEditandoIngresoId(null)
     await cargarTodo()
   }
 
@@ -189,6 +265,48 @@ export default function InventarioPage() {
     await cargarTodo()
   }
 
+  // ── Edición de entrega ──────────────────────────────────────
+  const iniciarEdicionEntrega = (e: InventarioEntrega) => {
+    setEditandoEntregaId(e.id)
+    setDraftEntrega({
+      producto_id: String(e.producto_id),
+      perfil_id: e.perfil_id,
+      cantidad: String(e.cantidad ?? ''),
+      costo_unitario: String(e.costo_unitario ?? ''),
+      reunion_id: e.reunion_id ? String(e.reunion_id) : '',
+      notas: e.notas || '',
+      fecha: e.fecha || hoyISO(),
+    })
+  }
+  const cancelarEdicionEntrega = () => setEditandoEntregaId(null)
+  const guardarEdicionEntrega = async () => {
+    if (editandoEntregaId == null) return
+    setError('')
+    if (!draftEntrega.producto_id) { setError('Selecciona un producto.'); return }
+    if (!draftEntrega.perfil_id) { setError('Selecciona a quién se le entrega.'); return }
+    const cantidad = parseFloat(draftEntrega.cantidad)
+    if (!cantidad || cantidad <= 0) { setError('La cantidad debe ser mayor a 0.'); return }
+    const entregaOriginal = entregas.find((e) => e.id === editandoEntregaId)
+    if (entregaOriginal && cantidad < entregaOriginal.cantidad_devuelta) {
+      setError(`La cantidad no puede ser menor a lo ya devuelto (${entregaOriginal.cantidad_devuelta}).`)
+      return
+    }
+    setGuardandoEdicionEntrega(true)
+    const { error: err } = await supabase.from('inventario_entregas').update({
+      producto_id: parseInt(draftEntrega.producto_id),
+      perfil_id: draftEntrega.perfil_id,
+      cantidad,
+      costo_unitario: parseFloat(draftEntrega.costo_unitario || '0') || 0,
+      reunion_id: draftEntrega.reunion_id ? parseInt(draftEntrega.reunion_id) : null,
+      notas: draftEntrega.notas.trim() || null,
+      fecha: draftEntrega.fecha,
+    }).eq('id', editandoEntregaId)
+    setGuardandoEdicionEntrega(false)
+    if (err) { setError('Error al editar la entrega: ' + err.message); return }
+    setEditandoEntregaId(null)
+    await cargarTodo()
+  }
+
   const registrarDevolucion = async (entrega: InventarioEntrega) => {
     setError('')
     const valor = parseFloat(devoluciones[entrega.id] || '')
@@ -203,6 +321,7 @@ export default function InventarioPage() {
     setGuardandoDevolucion(null)
     if (err) { setError('Error al registrar la devolución: ' + err.message); return }
     setDevoluciones((prev) => ({ ...prev, [entrega.id]: '' }))
+    setMostrarDevolucionId(null)
     await cargarTodo()
   }
 
@@ -300,43 +419,75 @@ export default function InventarioPage() {
                 <thead>
                   <tr style={{ background: '#f0f6f9', borderBottom: '1px solid var(--color-borde)' }}>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Producto</th>
-                    <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Categoría</th>
-                    <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Unidad</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Costo unitario</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Ingresado</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Entregado neto</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Stock actual</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Valor en stock</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Estado</th>
+                    <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Editar</th>
                   </tr>
                 </thead>
                 <tbody>
                   {stock.length === 0 ? (
-                    <tr><td colSpan={9} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>Todavía no hay productos registrados.</td></tr>
+                    <tr><td colSpan={8} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>Todavía no hay productos registrados.</td></tr>
                   ) : (
                     stock.map((s, idx) => {
                       const prod = productos.find((p) => p.id === s.producto_id)
+                      const editando = editandoProductoId === s.producto_id
                       return (
-                        <tr key={s.producto_id} className="border-b" style={{ borderColor: 'var(--color-borde)', background: idx % 2 === 0 ? 'white' : '#fafbfc' }}>
-                          <td className="px-3 py-2.5 font-semibold whitespace-nowrap" style={{ color: 'var(--texto-principal)' }}>{s.nombre}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">{s.categoria || '—'}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">{s.unidad_medida || '—'}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">{formatMoneda(s.costo_unitario)}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">{s.total_ingresado}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">{s.total_entregado_neto}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap font-semibold" style={{ color: s.stock_actual < 0 ? '#9b1c3a' : 'var(--texto-principal)' }}>{s.stock_actual}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">{formatMoneda(s.stock_actual * s.costo_unitario)}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">
-                            {prod && (
-                              <button
-                                onClick={() => toggleActivoProducto(prod)}
-                                className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                                style={s.activo ? { background: '#dcfce7', color: '#166534' } : { background: '#f3f4f6', color: 'var(--texto-secundario)' }}>
-                                {s.activo ? 'Activo' : 'Inactivo'}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
+                        <Fragment key={s.producto_id}>
+                          <tr className="border-b" style={{ borderColor: 'var(--color-borde)', background: idx % 2 === 0 ? 'white' : '#fafbfc' }}>
+                            <td className="px-3 py-2.5 font-semibold whitespace-nowrap" style={{ color: 'var(--texto-principal)' }}>{s.nombre}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{formatMoneda(s.costo_unitario)}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{s.total_ingresado}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{s.total_entregado_neto}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap font-semibold" style={{ color: s.stock_actual < 0 ? '#9b1c3a' : 'var(--texto-principal)' }}>{s.stock_actual}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{formatMoneda(s.stock_actual * s.costo_unitario)}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              {prod && (
+                                <button
+                                  onClick={() => toggleActivoProducto(prod)}
+                                  className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                                  style={s.activo ? { background: '#dcfce7', color: '#166534' } : { background: '#f3f4f6', color: 'var(--texto-secundario)' }}>
+                                  {s.activo ? 'Activo' : 'Inactivo'}
+                                </button>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              {prod && (
+                                <button
+                                  onClick={() => editando ? cancelarEdicionProducto() : iniciarEdicionProducto(prod)}
+                                  className="text-xs font-semibold px-2 py-1 rounded-lg border"
+                                  style={{ borderColor: 'var(--color-borde)', color: '#004466' }}>
+                                  {editando ? 'Cancelar' : 'Editar'}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                          {editando && (
+                            <tr style={{ background: '#f0f6f9' }}>
+                              <td colSpan={8} className="px-3 py-3">
+                                <div className="space-y-2">
+                                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                                    <input className={inputField} placeholder="Nombre" value={draftProducto.nombre} onChange={(e) => setDraftProducto({ ...draftProducto, nombre: e.target.value })} />
+                                    <input className={inputField} placeholder="Categoría" value={draftProducto.categoria} onChange={(e) => setDraftProducto({ ...draftProducto, categoria: e.target.value })} />
+                                    <input className={inputField} placeholder="Unidad de medida" value={draftProducto.unidad_medida} onChange={(e) => setDraftProducto({ ...draftProducto, unidad_medida: e.target.value })} />
+                                    <input className={inputField} type="number" step="0.01" placeholder="Costo unitario" value={draftProducto.costo_unitario} onChange={(e) => setDraftProducto({ ...draftProducto, costo_unitario: e.target.value })} />
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button onClick={guardarEdicionProducto} disabled={guardandoEdicionProducto} className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50" style={{ background: '#166534' }}>
+                                      {guardandoEdicionProducto ? 'Guardando...' : 'Guardar cambios'}
+                                    </button>
+                                    <button onClick={cancelarEdicionProducto} className="text-xs px-3 py-1.5 rounded-lg font-semibold border" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                                      Cancelar
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       )
                     })
                   )}
@@ -391,23 +542,64 @@ export default function InventarioPage() {
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Costo total</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Proveedor</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Notas</th>
+                    <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Editar</th>
                   </tr>
                 </thead>
                 <tbody>
                   {ingresos.length === 0 ? (
-                    <tr><td colSpan={7} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>Todavía no hay ingresos registrados.</td></tr>
+                    <tr><td colSpan={8} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>Todavía no hay ingresos registrados.</td></tr>
                   ) : (
-                    ingresos.map((ing, idx) => (
-                      <tr key={ing.id} className="border-b" style={{ borderColor: 'var(--color-borde)', background: idx % 2 === 0 ? 'white' : '#fafbfc' }}>
-                        <td className="px-3 py-2.5 whitespace-nowrap">{formatFecha(ing.fecha)}</td>
-                        <td className="px-3 py-2.5 whitespace-nowrap font-semibold" style={{ color: 'var(--texto-principal)' }}>{ing.inventario_productos?.nombre || '—'}</td>
-                        <td className="px-3 py-2.5 whitespace-nowrap">{ing.cantidad} {ing.inventario_productos?.unidad_medida || ''}</td>
-                        <td className="px-3 py-2.5 whitespace-nowrap">{formatMoneda(ing.costo_unitario)}</td>
-                        <td className="px-3 py-2.5 whitespace-nowrap">{formatMoneda(ing.cantidad * ing.costo_unitario)}</td>
-                        <td className="px-3 py-2.5 whitespace-nowrap">{ing.proveedor || '—'}</td>
-                        <td className="px-3 py-2.5 whitespace-nowrap">{ing.notas || '—'}</td>
-                      </tr>
-                    ))
+                    ingresos.map((ing, idx) => {
+                      const editando = editandoIngresoId === ing.id
+                      return (
+                        <Fragment key={ing.id}>
+                          <tr className="border-b" style={{ borderColor: 'var(--color-borde)', background: idx % 2 === 0 ? 'white' : '#fafbfc' }}>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{formatFecha(ing.fecha)}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap font-semibold" style={{ color: 'var(--texto-principal)' }}>{ing.inventario_productos?.nombre || '—'}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{ing.cantidad} {ing.inventario_productos?.unidad_medida || ''}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{formatMoneda(ing.costo_unitario)}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{formatMoneda(ing.cantidad * ing.costo_unitario)}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{ing.proveedor || '—'}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{ing.notas || '—'}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <button
+                                onClick={() => editando ? cancelarEdicionIngreso() : iniciarEdicionIngreso(ing)}
+                                className="text-xs font-semibold px-2 py-1 rounded-lg border"
+                                style={{ borderColor: 'var(--color-borde)', color: '#004466' }}>
+                                {editando ? 'Cancelar' : 'Editar'}
+                              </button>
+                            </td>
+                          </tr>
+                          {editando && (
+                            <tr style={{ background: '#f0f6f9' }}>
+                              <td colSpan={8} className="px-3 py-3">
+                                <div className="space-y-2">
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <select className={inputField} value={draftIngreso.producto_id} onChange={(e) => setDraftIngreso({ ...draftIngreso, producto_id: e.target.value })}>
+                                      <option value="">Selecciona un producto...</option>
+                                      {productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                                    </select>
+                                    <input className={inputField} type="number" step="0.01" placeholder="Cantidad" value={draftIngreso.cantidad} onChange={(e) => setDraftIngreso({ ...draftIngreso, cantidad: e.target.value })} />
+                                    <input className={inputField} type="number" step="0.01" placeholder="Costo unitario" value={draftIngreso.costo_unitario} onChange={(e) => setDraftIngreso({ ...draftIngreso, costo_unitario: e.target.value })} />
+                                    <input className={inputField} placeholder="Proveedor" value={draftIngreso.proveedor} onChange={(e) => setDraftIngreso({ ...draftIngreso, proveedor: e.target.value })} />
+                                    <input className={inputField} type="date" value={draftIngreso.fecha} onChange={(e) => setDraftIngreso({ ...draftIngreso, fecha: e.target.value })} />
+                                    <input className={inputField} placeholder="Notas (opcional)" value={draftIngreso.notas} onChange={(e) => setDraftIngreso({ ...draftIngreso, notas: e.target.value })} />
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button onClick={guardarEdicionIngreso} disabled={guardandoEdicionIngreso} className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50" style={{ background: '#166534' }}>
+                                      {guardandoEdicionIngreso ? 'Guardando...' : 'Guardar cambios'}
+                                    </button>
+                                    <button onClick={cancelarEdicionIngreso} className="text-xs px-3 py-1.5 rounded-lg font-semibold border" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                                      Cancelar
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      )
+                    })
                   )}
                 </tbody>
               </table>
@@ -468,51 +660,123 @@ export default function InventarioPage() {
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Devuelto</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Neto</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Costo neto</th>
-                    <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Registrar devolución</th>
+                    <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Devolución</th>
+                    <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Editar</th>
                   </tr>
                 </thead>
                 <tbody>
                   {entregas.length === 0 ? (
-                    <tr><td colSpan={9} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>Todavía no hay entregas registradas.</td></tr>
+                    <tr><td colSpan={10} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>Todavía no hay entregas registradas.</td></tr>
                   ) : (
                     entregas.map((e, idx) => {
                       const neto = e.cantidad - e.cantidad_devuelta
                       const disponible = neto
+                      const editando = editandoEntregaId === e.id
+                      const mostrandoDevolucion = mostrarDevolucionId === e.id
                       return (
-                        <tr key={e.id} className="border-b" style={{ borderColor: 'var(--color-borde)', background: idx % 2 === 0 ? 'white' : '#fafbfc' }}>
-                          <td className="px-3 py-2.5 whitespace-nowrap">{formatFecha(e.fecha)}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap font-semibold" style={{ color: 'var(--texto-principal)' }}>{e.inventario_productos?.nombre || '—'}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">{e.perfiles?.nombre_completo || e.perfiles?.email || '—'}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">{e.reuniones?.titulo || '—'}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">{e.cantidad}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">{e.cantidad_devuelta}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap font-semibold">{neto}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">{formatMoneda(neto * e.costo_unitario)}</td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">
-                            {disponible > 0 ? (
-                              <div className="flex items-center gap-1.5">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  className="w-20 text-xs border rounded px-2 py-1"
-                                  style={{ borderColor: 'var(--color-borde)' }}
-                                  placeholder="Cant."
-                                  value={devoluciones[e.id] || ''}
-                                  onChange={(ev) => setDevoluciones((prev) => ({ ...prev, [e.id]: ev.target.value }))}
-                                />
+                        <Fragment key={e.id}>
+                          <tr className="border-b" style={{ borderColor: 'var(--color-borde)', background: idx % 2 === 0 ? 'white' : '#fafbfc' }}>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{formatFecha(e.fecha)}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap font-semibold" style={{ color: 'var(--texto-principal)' }}>{e.inventario_productos?.nombre || '—'}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{e.perfiles?.nombre_completo || e.perfiles?.email || '—'}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{e.reuniones?.titulo || '—'}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{e.cantidad}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{e.cantidad_devuelta}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap font-semibold">{neto}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{formatMoneda(neto * e.costo_unitario)}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              {disponible > 0 ? (
                                 <button
-                                  onClick={() => registrarDevolucion(e)}
-                                  disabled={guardandoDevolucion === e.id}
-                                  className="text-xs px-2 py-1 rounded-lg font-semibold text-white disabled:opacity-50"
-                                  style={{ background: '#004466' }}>
-                                  {guardandoDevolucion === e.id ? '...' : 'Registrar'}
+                                  onClick={() => setMostrarDevolucionId(mostrandoDevolucion ? null : e.id)}
+                                  className="text-xs font-semibold px-2 py-1 rounded-lg border"
+                                  style={mostrandoDevolucion
+                                    ? { background: '#004466', color: 'white', borderColor: '#004466' }
+                                    : { borderColor: 'var(--color-borde)', color: '#004466' }}>
+                                  Devolución
                                 </button>
-                              </div>
-                            ) : (
-                              <span className="text-xs" style={{ color: 'var(--texto-secundario)' }}>Completo</span>
-                            )}
-                          </td>
-                        </tr>
+                              ) : (
+                                <span className="text-xs" style={{ color: 'var(--texto-secundario)' }}>Completo</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              <button
+                                onClick={() => editando ? cancelarEdicionEntrega() : iniciarEdicionEntrega(e)}
+                                className="text-xs font-semibold px-2 py-1 rounded-lg border"
+                                style={{ borderColor: 'var(--color-borde)', color: '#004466' }}>
+                                {editando ? 'Cancelar' : 'Editar'}
+                              </button>
+                            </td>
+                          </tr>
+
+                          {mostrandoDevolucion && (
+                            <tr style={{ background: '#f0f6f9' }}>
+                              <td colSpan={10} className="px-3 py-3">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs font-medium" style={{ color: 'var(--texto-secundario)' }}>
+                                    Cantidad a devolver (máx. {disponible}):
+                                  </p>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    className="w-24 text-xs border rounded px-2 py-1"
+                                    style={{ borderColor: 'var(--color-borde)' }}
+                                    placeholder="Cant."
+                                    value={devoluciones[e.id] || ''}
+                                    onChange={(ev) => setDevoluciones((prev) => ({ ...prev, [e.id]: ev.target.value }))}
+                                  />
+                                  <button
+                                    onClick={() => registrarDevolucion(e)}
+                                    disabled={guardandoDevolucion === e.id}
+                                    className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50"
+                                    style={{ background: '#166534' }}>
+                                    {guardandoDevolucion === e.id ? 'Guardando...' : 'Registrar'}
+                                  </button>
+                                  <button
+                                    onClick={() => setMostrarDevolucionId(null)}
+                                    className="text-xs px-3 py-1.5 rounded-lg font-semibold border"
+                                    style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+
+                          {editando && (
+                            <tr style={{ background: '#f0f6f9' }}>
+                              <td colSpan={10} className="px-3 py-3">
+                                <div className="space-y-2">
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <select className={inputField} value={draftEntrega.producto_id} onChange={(e2) => setDraftEntrega({ ...draftEntrega, producto_id: e2.target.value })}>
+                                      <option value="">Selecciona un producto...</option>
+                                      {productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                                    </select>
+                                    <select className={inputField} value={draftEntrega.perfil_id} onChange={(e2) => setDraftEntrega({ ...draftEntrega, perfil_id: e2.target.value })}>
+                                      <option value="">¿A quién se entrega?</option>
+                                      {colaboradores.map((c) => <option key={c.id} value={c.id}>{c.nombre_completo || c.email}</option>)}
+                                    </select>
+                                    <input className={inputField} type="number" step="0.01" placeholder="Cantidad" value={draftEntrega.cantidad} onChange={(e2) => setDraftEntrega({ ...draftEntrega, cantidad: e2.target.value })} />
+                                    <input className={inputField} type="number" step="0.01" placeholder="Costo unitario" value={draftEntrega.costo_unitario} onChange={(e2) => setDraftEntrega({ ...draftEntrega, costo_unitario: e2.target.value })} />
+                                    <select className={inputField} value={draftEntrega.reunion_id} onChange={(e2) => setDraftEntrega({ ...draftEntrega, reunion_id: e2.target.value })}>
+                                      <option value="">Sin actividad asociada</option>
+                                      {reuniones.map((r) => <option key={r.id} value={r.id}>{r.titulo} — {formatFecha(r.fecha)}</option>)}
+                                    </select>
+                                    <input className={inputField} type="date" value={draftEntrega.fecha} onChange={(e2) => setDraftEntrega({ ...draftEntrega, fecha: e2.target.value })} />
+                                    <input className={inputField} placeholder="Notas (opcional)" value={draftEntrega.notas} onChange={(e2) => setDraftEntrega({ ...draftEntrega, notas: e2.target.value })} />
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button onClick={guardarEdicionEntrega} disabled={guardandoEdicionEntrega} className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50" style={{ background: '#166534' }}>
+                                      {guardandoEdicionEntrega ? 'Guardando...' : 'Guardar cambios'}
+                                    </button>
+                                    <button onClick={cancelarEdicionEntrega} className="text-xs px-3 py-1.5 rounded-lg font-semibold border" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                                      Cancelar
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       )
                     })
                   )}
