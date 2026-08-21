@@ -17,6 +17,8 @@ import WebcamCapture from '@/components/WebcamCapture'
 
 type Vista = 'stock' | 'ingresos' | 'entregas' | 'reporte'
 
+type LineaEntrega = { producto_id: string; cantidad: string; costo_unitario: string }
+
 function hoyISO() {
   const d = new Date()
   const mes = String(d.getMonth() + 1).padStart(2, '0')
@@ -35,6 +37,8 @@ const formatFecha = (f?: string | null) => {
     return f
   }
 }
+
+const lineaVacia = (): LineaEntrega => ({ producto_id: '', cantidad: '', costo_unitario: '' })
 
 export default function InventarioPage() {
   const router = useRouter()
@@ -59,11 +63,13 @@ export default function InventarioPage() {
   const [formIngreso, setFormIngreso] = useState({ producto_id: '', cantidad: '', costo_unitario: '', proveedor: '', notas: '', fecha: hoyISO() })
   const [guardandoIngreso, setGuardandoIngreso] = useState(false)
 
+  // ── Nueva entrega (tanda multi-producto) ────────────────────
   const [mostrarFormEntrega, setMostrarFormEntrega] = useState(false)
-  const [formEntrega, setFormEntrega] = useState({ producto_id: '', perfil_id: '', cantidad: '', costo_unitario: '', reunion_id: '', notas: '', fecha: hoyISO() })
+  const [formEntrega, setFormEntrega] = useState({ perfil_id: '', reunion_id: '', notas: '', fecha: hoyISO() })
+  const [lineasEntrega, setLineasEntrega] = useState<LineaEntrega[]>([lineaVacia()])
   const [guardandoEntrega, setGuardandoEntrega] = useState(false)
 
-  // ── Foto de entrega (webcam / R2) ────────────────────────────
+  // ── Foto de entrega (webcam / R2), una por tanda ─────────────
   const [mostrarWebcam, setMostrarWebcam] = useState(false)
   const [fotoEntregaUrl, setFotoEntregaUrl] = useState<string | null>(null)
 
@@ -248,39 +254,55 @@ export default function InventarioPage() {
     await cargarTodo()
   }
 
-  const handleProductoEntregaChange = (id: string) => {
-    const prod = productos.find((p) => String(p.id) === id)
-    setFormEntrega((prev) => ({ ...prev, producto_id: id, costo_unitario: prod ? String(prod.costo_unitario) : prev.costo_unitario }))
+  // ── Líneas de producto dentro de la tanda de "Nueva entrega" ─
+  const actualizarLineaEntrega = (index: number, campo: keyof LineaEntrega, valor: string) => {
+    setLineasEntrega((prev) => prev.map((l, i) => {
+      if (i !== index) return l
+      if (campo === 'producto_id') {
+        const prod = productos.find((p) => String(p.id) === valor)
+        return { ...l, producto_id: valor, costo_unitario: prod ? String(prod.costo_unitario) : l.costo_unitario }
+      }
+      return { ...l, [campo]: valor }
+    }))
   }
+  const agregarLineaEntrega = () => setLineasEntrega((prev) => [...prev, lineaVacia()])
+  const quitarLineaEntrega = (index: number) => setLineasEntrega((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== index)))
 
   const crearEntrega = async () => {
     setError('')
-    if (!formEntrega.producto_id) { setError('Selecciona un producto.'); return }
     if (!formEntrega.perfil_id) { setError('Selecciona a quién se le entrega.'); return }
-    const cantidad = parseFloat(formEntrega.cantidad)
-    if (!cantidad || cantidad <= 0) { setError('La cantidad debe ser mayor a 0.'); return }
+    for (let i = 0; i < lineasEntrega.length; i++) {
+      const l = lineasEntrega[i]
+      if (!l.producto_id) { setError(`Selecciona el producto de la línea ${i + 1}.`); return }
+      const cantidad = parseFloat(l.cantidad)
+      if (!cantidad || cantidad <= 0) { setError(`La cantidad de la línea ${i + 1} debe ser mayor a 0.`); return }
+    }
     setGuardandoEntrega(true)
-    const { error: err } = await supabase.from('inventario_entregas').insert({
-      producto_id: parseInt(formEntrega.producto_id),
+    const loteId = crypto.randomUUID()
+    const filas = lineasEntrega.map((l) => ({
+      producto_id: parseInt(l.producto_id),
       perfil_id: formEntrega.perfil_id,
-      cantidad,
-      costo_unitario: parseFloat(formEntrega.costo_unitario || '0') || 0,
+      cantidad: parseFloat(l.cantidad),
+      costo_unitario: parseFloat(l.costo_unitario || '0') || 0,
       reunion_id: formEntrega.reunion_id ? parseInt(formEntrega.reunion_id) : null,
       notas: formEntrega.notas.trim() || null,
       fecha: formEntrega.fecha,
       entregado_por: perfil?.id,
       foto_url: fotoEntregaUrl,
-    })
+      lote_id: loteId,
+    }))
+    const { error: err } = await supabase.from('inventario_entregas').insert(filas)
     setGuardandoEntrega(false)
     if (err) { setError('Error al registrar la entrega: ' + err.message); return }
-    setFormEntrega({ producto_id: '', perfil_id: '', cantidad: '', costo_unitario: '', reunion_id: '', notas: '', fecha: hoyISO() })
+    setFormEntrega({ perfil_id: '', reunion_id: '', notas: '', fecha: hoyISO() })
+    setLineasEntrega([lineaVacia()])
     setFotoEntregaUrl(null)
     setMostrarWebcam(false)
     setMostrarFormEntrega(false)
     await cargarTodo()
   }
 
-  // ── Edición de entrega ──────────────────────────────────────
+  // ── Edición de un producto individual de una entrega ya registrada ─
   const iniciarEdicionEntrega = (e: InventarioEntrega) => {
     setEditandoEntregaId(e.id)
     setDraftEntrega({
@@ -344,6 +366,18 @@ export default function InventarioPage() {
   const inputField = "input-field"
 
   const totalCostoStock = stock.reduce((acc, s) => acc + s.stock_actual * s.costo_unitario, 0)
+
+  // ── Agrupar entregas por tanda (lote_id) para mostrarlas como acordeón ─
+  const gruposEntregas = (() => {
+    const mapa = new Map<string, InventarioEntrega[]>()
+    const orden: string[] = []
+    entregas.forEach((e) => {
+      const key = e.lote_id || `single-${e.id}`
+      if (!mapa.has(key)) { mapa.set(key, []); orden.push(key) }
+      mapa.get(key)!.push(e)
+    })
+    return orden.map((key) => ({ key, items: mapa.get(key)! }))
+  })()
 
   if (loading) {
     return (
@@ -626,7 +660,7 @@ export default function InventarioPage() {
           <>
             <div className="flex items-center justify-between flex-wrap gap-2">
               <p className="text-sm font-medium" style={{ color: 'var(--texto-secundario)' }}>
-                {entregas.length} entrega{entregas.length !== 1 ? 's' : ''} recientes
+                {gruposEntregas.length} entrega{gruposEntregas.length !== 1 ? 's' : ''} recientes
               </p>
               <button
                 onClick={() => setMostrarFormEntrega((v) => !v)}
@@ -637,29 +671,53 @@ export default function InventarioPage() {
             </div>
 
             {mostrarFormEntrega && (
-              <div className="card space-y-3">
+              <div className="card space-y-4">
                 <p className="text-sm font-semibold" style={{ color: 'var(--texto-principal)' }}>Nueva entrega</p>
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <select className={inputField} value={formEntrega.producto_id} onChange={(e) => handleProductoEntregaChange(e.target.value)}>
-                    <option value="">Selecciona un producto...</option>
-                    {productosActivos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                  </select>
                   <select className={inputField} value={formEntrega.perfil_id} onChange={(e) => setFormEntrega({ ...formEntrega, perfil_id: e.target.value })}>
                     <option value="">¿A quién se entrega?</option>
                     {colaboradores.map((c) => <option key={c.id} value={c.id}>{c.nombre_completo || c.email}</option>)}
                   </select>
-                  <input className={inputField} type="number" step="0.01" placeholder="Cantidad" value={formEntrega.cantidad} onChange={(e) => setFormEntrega({ ...formEntrega, cantidad: e.target.value })} />
-                  <input className={inputField} type="number" step="0.01" placeholder="Costo unitario" value={formEntrega.costo_unitario} onChange={(e) => setFormEntrega({ ...formEntrega, costo_unitario: e.target.value })} />
                   <select className={inputField} value={formEntrega.reunion_id} onChange={(e) => setFormEntrega({ ...formEntrega, reunion_id: e.target.value })}>
                     <option value="">Sin actividad asociada</option>
                     {reuniones.map((r) => <option key={r.id} value={r.id}>{r.titulo} — {formatFecha(r.fecha)}</option>)}
                   </select>
                   <input className={inputField} type="date" value={formEntrega.fecha} onChange={(e) => setFormEntrega({ ...formEntrega, fecha: e.target.value })} />
-                  <input className={inputField} placeholder="Notas (opcional)" value={formEntrega.notas} onChange={(e) => setFormEntrega({ ...formEntrega, notas: e.target.value })} />
+                  <input className={`${inputField} sm:col-span-3`} placeholder="Notas (opcional)" value={formEntrega.notas} onChange={(e) => setFormEntrega({ ...formEntrega, notas: e.target.value })} />
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold" style={{ color: 'var(--texto-principal)' }}>Productos de esta entrega</p>
+                  {lineasEntrega.map((linea, idx) => (
+                    <div key={idx} className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                      <select className={inputField} value={linea.producto_id} onChange={(e) => actualizarLineaEntrega(idx, 'producto_id', e.target.value)}>
+                        <option value="">Selecciona un producto...</option>
+                        {productosActivos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                      </select>
+                      <input className={inputField} type="number" step="0.01" placeholder="Cantidad" value={linea.cantidad} onChange={(e) => actualizarLineaEntrega(idx, 'cantidad', e.target.value)} />
+                      <input className={inputField} type="number" step="0.01" placeholder="Costo unitario" value={linea.costo_unitario} onChange={(e) => actualizarLineaEntrega(idx, 'costo_unitario', e.target.value)} />
+                      <button
+                        type="button"
+                        onClick={() => quitarLineaEntrega(idx)}
+                        disabled={lineasEntrega.length === 1}
+                        className="text-xs px-3 py-1.5 rounded-lg font-semibold border disabled:opacity-30"
+                        style={{ borderColor: 'var(--color-borde)', color: '#9b1c3a' }}>
+                        Quitar
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={agregarLineaEntrega}
+                    className="text-xs px-3 py-1.5 rounded-lg font-semibold border"
+                    style={{ borderColor: '#004466', color: '#004466' }}>
+                    + Agregar producto
+                  </button>
                 </div>
 
                 <div>
-                  <p className="text-xs font-semibold mb-1" style={{ color: 'var(--texto-principal)' }}>Foto (opcional)</p>
+                  <p className="text-xs font-semibold mb-1" style={{ color: 'var(--texto-principal)' }}>Foto de la entrega (opcional, una para toda la tanda)</p>
                   {!mostrarWebcam && !fotoEntregaUrl && (
                     <button
                       type="button"
@@ -700,10 +758,10 @@ export default function InventarioPage() {
                 <thead>
                   <tr style={{ background: '#f0f6f9', borderBottom: '1px solid var(--color-borde)' }}>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Fecha</th>
-                    <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Producto</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Colaborador</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Actividad</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Foto</th>
+                    <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Producto</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Entregado</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Devuelto</th>
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }}>Neto</th>
@@ -713,126 +771,145 @@ export default function InventarioPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {entregas.length === 0 ? (
+                  {gruposEntregas.length === 0 ? (
                     <tr><td colSpan={11} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>Todavía no hay entregas registradas.</td></tr>
                   ) : (
-                    entregas.map((e, idx) => {
-                      const neto = e.cantidad - e.cantidad_devuelta
-                      const disponible = neto
-                      const editando = editandoEntregaId === e.id
-                      const mostrandoDevolucion = mostrarDevolucionId === e.id
+                    gruposEntregas.map((grupo, gIdx) => {
+                      const primero = grupo.items[0]
+                      const bgGrupo = gIdx % 2 === 0 ? 'white' : '#fafbfc'
+                      const bgHeader = gIdx % 2 === 0 ? '#eef5f9' : '#e6eff3'
                       return (
-                        <Fragment key={e.id}>
-                          <tr className="border-b" style={{ borderColor: 'var(--color-borde)', background: idx % 2 === 0 ? 'white' : '#fafbfc' }}>
-                            <td className="px-3 py-2.5 whitespace-nowrap">{formatFecha(e.fecha)}</td>
-                            <td className="px-3 py-2.5 whitespace-nowrap font-semibold" style={{ color: 'var(--texto-principal)' }}>{e.inventario_productos?.nombre || '—'}</td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">{e.perfiles?.nombre_completo || e.perfiles?.email || '—'}</td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">{e.reuniones?.titulo || '—'}</td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">
-                              {e.foto_url ? (
-                                <a href={e.foto_url} target="_blank" rel="noopener noreferrer">
-                                  <img src={e.foto_url} alt="Foto de la entrega" className="w-10 h-10 object-cover rounded-lg border" style={{ borderColor: 'var(--color-borde)' }} />
+                        <Fragment key={grupo.key}>
+                          <tr style={{ background: bgHeader, borderBottom: '1px solid var(--color-borde)' }}>
+                            <td className="px-3 py-2 whitespace-nowrap font-semibold" style={{ color: '#004466' }}>{formatFecha(primero.fecha)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap font-semibold" style={{ color: '#004466' }}>{primero.perfiles?.nombre_completo || primero.perfiles?.email || '—'}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{primero.reuniones?.titulo || '—'}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              {primero.foto_url ? (
+                                <a href={primero.foto_url} target="_blank" rel="noopener noreferrer">
+                                  <img src={primero.foto_url} alt="Foto de la entrega" className="w-10 h-10 object-cover rounded-lg border" style={{ borderColor: 'var(--color-borde)' }} />
                                 </a>
                               ) : (
                                 <span style={{ color: 'var(--texto-secundario)' }}>—</span>
                               )}
                             </td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">{e.cantidad}</td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">{e.cantidad_devuelta}</td>
-                            <td className="px-3 py-2.5 whitespace-nowrap font-semibold">{neto}</td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">{formatMoneda(neto * e.costo_unitario)}</td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">
-                              {disponible > 0 ? (
-                                <button
-                                  onClick={() => setMostrarDevolucionId(mostrandoDevolucion ? null : e.id)}
-                                  className="text-xs font-semibold px-2 py-1 rounded-lg border"
-                                  style={mostrandoDevolucion
-                                    ? { background: '#004466', color: 'white', borderColor: '#004466' }
-                                    : { borderColor: 'var(--color-borde)', color: '#004466' }}>
-                                  Devolución
-                                </button>
-                              ) : (
-                                <span className="text-xs" style={{ color: 'var(--texto-secundario)' }}>Completo</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">
-                              <button
-                                onClick={() => editando ? cancelarEdicionEntrega() : iniciarEdicionEntrega(e)}
-                                className="text-xs font-semibold px-2 py-1 rounded-lg border"
-                                style={{ borderColor: 'var(--color-borde)', color: '#004466' }}>
-                                {editando ? 'Cancelar' : 'Editar'}
-                              </button>
+                            <td colSpan={7} className="px-3 py-2 text-xs" style={{ color: 'var(--texto-secundario)' }}>
+                              {grupo.items.length} producto{grupo.items.length !== 1 ? 's' : ''} en esta entrega
                             </td>
                           </tr>
 
-                          {mostrandoDevolucion && (
-                            <tr style={{ background: '#f0f6f9' }}>
-                              <td colSpan={11} className="px-3 py-3">
-                                <div className="flex items-center gap-2">
-                                  <p className="text-xs font-medium" style={{ color: 'var(--texto-secundario)' }}>
-                                    Cantidad a devolver (máx. {disponible}):
-                                  </p>
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    className="w-24 text-xs border rounded px-2 py-1"
-                                    style={{ borderColor: 'var(--color-borde)' }}
-                                    placeholder="Cant."
-                                    value={devoluciones[e.id] || ''}
-                                    onChange={(ev) => setDevoluciones((prev) => ({ ...prev, [e.id]: ev.target.value }))}
-                                  />
-                                  <button
-                                    onClick={() => registrarDevolucion(e)}
-                                    disabled={guardandoDevolucion === e.id}
-                                    className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50"
-                                    style={{ background: '#166534' }}>
-                                    {guardandoDevolucion === e.id ? 'Guardando...' : 'Registrar'}
-                                  </button>
-                                  <button
-                                    onClick={() => setMostrarDevolucionId(null)}
-                                    className="text-xs px-3 py-1.5 rounded-lg font-semibold border"
-                                    style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
-                                    Cancelar
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
+                          {grupo.items.map((e) => {
+                            const neto = e.cantidad - e.cantidad_devuelta
+                            const disponible = neto
+                            const editando = editandoEntregaId === e.id
+                            const mostrandoDevolucion = mostrarDevolucionId === e.id
+                            return (
+                              <Fragment key={e.id}>
+                                <tr className="border-b" style={{ borderColor: 'var(--color-borde)', background: bgGrupo }}>
+                                  <td colSpan={4} className="px-3 py-2"></td>
+                                  <td className="px-3 py-2 whitespace-nowrap font-semibold" style={{ color: 'var(--texto-principal)' }}>{e.inventario_productos?.nombre || '—'}</td>
+                                  <td className="px-3 py-2 whitespace-nowrap">{e.cantidad}</td>
+                                  <td className="px-3 py-2 whitespace-nowrap">{e.cantidad_devuelta}</td>
+                                  <td className="px-3 py-2 whitespace-nowrap font-semibold">{neto}</td>
+                                  <td className="px-3 py-2 whitespace-nowrap">{formatMoneda(neto * e.costo_unitario)}</td>
+                                  <td className="px-3 py-2 whitespace-nowrap">
+                                    {disponible > 0 ? (
+                                      <button
+                                        onClick={() => setMostrarDevolucionId(mostrandoDevolucion ? null : e.id)}
+                                        className="text-xs font-semibold px-2 py-1 rounded-lg border"
+                                        style={mostrandoDevolucion
+                                          ? { background: '#004466', color: 'white', borderColor: '#004466' }
+                                          : { borderColor: 'var(--color-borde)', color: '#004466' }}>
+                                        Devolución
+                                      </button>
+                                    ) : (
+                                      <span className="text-xs" style={{ color: 'var(--texto-secundario)' }}>Completo</span>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2 whitespace-nowrap">
+                                    <button
+                                      onClick={() => editando ? cancelarEdicionEntrega() : iniciarEdicionEntrega(e)}
+                                      className="text-xs font-semibold px-2 py-1 rounded-lg border"
+                                      style={{ borderColor: 'var(--color-borde)', color: '#004466' }}>
+                                      {editando ? 'Cancelar' : 'Editar'}
+                                    </button>
+                                  </td>
+                                </tr>
 
-                          {editando && (
-                            <tr style={{ background: '#f0f6f9' }}>
-                              <td colSpan={11} className="px-3 py-3">
-                                <div className="space-y-2">
-                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                    <select className={inputField} value={draftEntrega.producto_id} onChange={(e2) => setDraftEntrega({ ...draftEntrega, producto_id: e2.target.value })}>
-                                      <option value="">Selecciona un producto...</option>
-                                      {productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                                    </select>
-                                    <select className={inputField} value={draftEntrega.perfil_id} onChange={(e2) => setDraftEntrega({ ...draftEntrega, perfil_id: e2.target.value })}>
-                                      <option value="">¿A quién se entrega?</option>
-                                      {colaboradores.map((c) => <option key={c.id} value={c.id}>{c.nombre_completo || c.email}</option>)}
-                                    </select>
-                                    <input className={inputField} type="number" step="0.01" placeholder="Cantidad" value={draftEntrega.cantidad} onChange={(e2) => setDraftEntrega({ ...draftEntrega, cantidad: e2.target.value })} />
-                                    <input className={inputField} type="number" step="0.01" placeholder="Costo unitario" value={draftEntrega.costo_unitario} onChange={(e2) => setDraftEntrega({ ...draftEntrega, costo_unitario: e2.target.value })} />
-                                    <select className={inputField} value={draftEntrega.reunion_id} onChange={(e2) => setDraftEntrega({ ...draftEntrega, reunion_id: e2.target.value })}>
-                                      <option value="">Sin actividad asociada</option>
-                                      {reuniones.map((r) => <option key={r.id} value={r.id}>{r.titulo} — {formatFecha(r.fecha)}</option>)}
-                                    </select>
-                                    <input className={inputField} type="date" value={draftEntrega.fecha} onChange={(e2) => setDraftEntrega({ ...draftEntrega, fecha: e2.target.value })} />
-                                    <input className={inputField} placeholder="Notas (opcional)" value={draftEntrega.notas} onChange={(e2) => setDraftEntrega({ ...draftEntrega, notas: e2.target.value })} />
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <button onClick={guardarEdicionEntrega} disabled={guardandoEdicionEntrega} className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50" style={{ background: '#166534' }}>
-                                      {guardandoEdicionEntrega ? 'Guardando...' : 'Guardar cambios'}
-                                    </button>
-                                    <button onClick={cancelarEdicionEntrega} className="text-xs px-3 py-1.5 rounded-lg font-semibold border" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
-                                      Cancelar
-                                    </button>
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
+                                {mostrandoDevolucion && (
+                                  <tr style={{ background: '#f0f6f9' }}>
+                                    <td colSpan={11} className="px-3 py-3">
+                                      <div className="flex items-center gap-2">
+                                        <p className="text-xs font-medium" style={{ color: 'var(--texto-secundario)' }}>
+                                          Cantidad a devolver (máx. {disponible}):
+                                        </p>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          className="w-24 text-xs border rounded px-2 py-1"
+                                          style={{ borderColor: 'var(--color-borde)' }}
+                                          placeholder="Cant."
+                                          value={devoluciones[e.id] || ''}
+                                          onChange={(ev) => setDevoluciones((prev) => ({ ...prev, [e.id]: ev.target.value }))}
+                                        />
+                                        <button
+                                          onClick={() => registrarDevolucion(e)}
+                                          disabled={guardandoDevolucion === e.id}
+                                          className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50"
+                                          style={{ background: '#166534' }}>
+                                          {guardandoDevolucion === e.id ? 'Guardando...' : 'Registrar'}
+                                        </button>
+                                        <button
+                                          onClick={() => setMostrarDevolucionId(null)}
+                                          className="text-xs px-3 py-1.5 rounded-lg font-semibold border"
+                                          style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                                          Cancelar
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+
+                                {editando && (
+                                  <tr style={{ background: '#f0f6f9' }}>
+                                    <td colSpan={11} className="px-3 py-3">
+                                      <div className="space-y-2">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                          <select className={inputField} value={draftEntrega.producto_id} onChange={(e2) => setDraftEntrega({ ...draftEntrega, producto_id: e2.target.value })}>
+                                            <option value="">Selecciona un producto...</option>
+                                            {productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                                          </select>
+                                          <select className={inputField} value={draftEntrega.perfil_id} onChange={(e2) => setDraftEntrega({ ...draftEntrega, perfil_id: e2.target.value })}>
+                                            <option value="">¿A quién se entrega?</option>
+                                            {colaboradores.map((c) => <option key={c.id} value={c.id}>{c.nombre_completo || c.email}</option>)}
+                                          </select>
+                                          <input className={inputField} type="number" step="0.01" placeholder="Cantidad" value={draftEntrega.cantidad} onChange={(e2) => setDraftEntrega({ ...draftEntrega, cantidad: e2.target.value })} />
+                                          <input className={inputField} type="number" step="0.01" placeholder="Costo unitario" value={draftEntrega.costo_unitario} onChange={(e2) => setDraftEntrega({ ...draftEntrega, costo_unitario: e2.target.value })} />
+                                          <select className={inputField} value={draftEntrega.reunion_id} onChange={(e2) => setDraftEntrega({ ...draftEntrega, reunion_id: e2.target.value })}>
+                                            <option value="">Sin actividad asociada</option>
+                                            {reuniones.map((r) => <option key={r.id} value={r.id}>{r.titulo} — {formatFecha(r.fecha)}</option>)}
+                                          </select>
+                                          <input className={inputField} type="date" value={draftEntrega.fecha} onChange={(e2) => setDraftEntrega({ ...draftEntrega, fecha: e2.target.value })} />
+                                          <input className={inputField} placeholder="Notas (opcional)" value={draftEntrega.notas} onChange={(e2) => setDraftEntrega({ ...draftEntrega, notas: e2.target.value })} />
+                                        </div>
+                                        <p className="text-xs" style={{ color: 'var(--texto-secundario)' }}>
+                                          Nota: este formulario edita solo este producto. Si cambiás colaborador o fecha, este ítem puede dejar de coincidir con el resto de su tanda.
+                                        </p>
+                                        <div className="flex gap-2">
+                                          <button onClick={guardarEdicionEntrega} disabled={guardandoEdicionEntrega} className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50" style={{ background: '#166534' }}>
+                                            {guardandoEdicionEntrega ? 'Guardando...' : 'Guardar cambios'}
+                                          </button>
+                                          <button onClick={cancelarEdicionEntrega} className="text-xs px-3 py-1.5 rounded-lg font-semibold border" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                                            Cancelar
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            )
+                          })}
                         </Fragment>
                       )
                     })
