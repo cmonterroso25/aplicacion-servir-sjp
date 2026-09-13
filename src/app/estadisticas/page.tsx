@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, type Perfil } from '@/lib/supabase'
 import NavBar from '@/components/NavBar'
@@ -60,11 +60,42 @@ type EstadisticaLegalTemplario = {
   pendientes: number
 }
 
+// ── Estructura (Templario → Coordinador → Afiliados) ──────────
+type TemplarioOption = {
+  id: number
+  nombre: string
+}
+
+type RawAfiliadoEstructura = {
+  id: number
+  primer_nombre: string | null
+  segundo_nombre: string | null
+  primer_apellido: string | null
+  segundo_apellido: string | null
+  rol_afiliado: string | null
+  afiliado_por: string | null
+  coordinador_id: number | null
+}
+
+type EstructuraAfiliado = {
+  id: number
+  nombre: string
+}
+
+type EstructuraCoordinador = {
+  id: number
+  nombre: string
+  afiliados: EstructuraAfiliado[]
+}
+
+const META_COORDINADORES_POR_TEMPLARIO = 20
+const META_AFILIADOS_POR_COORDINADOR = 35
+
 const ROLES_SIN_ACCESO = ['lider', 'colaborador', 'templario']
 const ROLES_LEGALES = ['admin', 'pentagono']
 
 // ──────────────────────────────────────────────────────────────
-// Normalización de nombres (compartida entre Por sector y Por templario)
+// Normalización de nombres (compartida entre Por sector, Por templario y Estructura)
 // ──────────────────────────────────────────────────────────────
 // Resuelve variantes por tildes, mayúsculas o espacios extra
 // (ej. "René Galicia" vs "Rene Galicia", "Sebastián España" vs
@@ -91,10 +122,16 @@ function claveFinal(nombreOriginal: string): string {
   return ALIAS_TEMPLARIOS[base] || base
 }
 
+function nombreCompletoAfiliado(a: RawAfiliadoEstructura): string {
+  return [a.primer_nombre, a.segundo_nombre, a.primer_apellido, a.segundo_apellido]
+    .filter(Boolean)
+    .join(' ')
+}
+
 export default function EstadisticasPage() {
   const router = useRouter()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
-  const [vista, setVista] = useState<'sector' | 'templario'>('sector')
+  const [vista, setVista] = useState<'sector' | 'templario' | 'estructura'>('sector')
 
   // ── Por sector ──────────────────────────────────────────────
   const [estadisticas, setEstadisticas] = useState<EstadisticaSector[]>([])
@@ -118,6 +155,14 @@ export default function EstadisticasPage() {
   const [statsLegalesTemplario, setStatsLegalesTemplario] = useState<EstadisticaLegalTemplario[]>([])
   const [totalesLegalesTemplario, setTotalesLegalesTemplario] = useState({ total: 0, vinculados: 0, pendientes: 0 })
   const [loadingLegalesTemplario, setLoadingLegalesTemplario] = useState(false)
+
+  // ── Estructura (piramide) ───────────────────────────────────
+  const [estructuraDataCargada, setEstructuraDataCargada] = useState(false)
+  const [loadingEstructura, setLoadingEstructura] = useState(false)
+  const [templarios, setTemplarios] = useState<TemplarioOption[]>([])
+  const [templarioSeleccionado, setTemplarioSeleccionado] = useState<string>('')
+  const [afiliadosEstructura, setAfiliadosEstructura] = useState<RawAfiliadoEstructura[]>([])
+  const [expandidoCoordinador, setExpandidoCoordinador] = useState<number | null>(null)
 
   useEffect(() => {
     const init = async () => {
@@ -153,6 +198,76 @@ export default function EstadisticasPage() {
       cargarStatsLegalesTemplario()
     }
   }
+
+  const seleccionarVistaEstructura = () => {
+    setVista('estructura')
+    if (!estructuraDataCargada) {
+      setEstructuraDataCargada(true)
+      setLoadingEstructura(true)
+      cargarEstructura()
+    }
+  }
+
+  const cargarEstructura = async () => {
+    try {
+      const { data: templariosData, error: templariosError } = await supabase
+        .from('afiliado_por')
+        .select('id, nombre')
+        .order('nombre')
+
+      if (templariosError) throw templariosError
+      setTemplarios(templariosData || [])
+
+      let allRows: RawAfiliadoEstructura[] = []
+      let from = 0
+      const pageSize = 1000
+      let hasMore = true
+
+      while (hasMore) {
+        const { data: page, error } = await supabase
+          .from('afiliados')
+          .select('id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, rol_afiliado, afiliado_por, coordinador_id')
+          .range(from, from + pageSize - 1)
+
+        if (error) throw error
+        if (!page || page.length === 0) { hasMore = false; break }
+
+        allRows = allRows.concat(page as RawAfiliadoEstructura[])
+        if (page.length < pageSize) hasMore = false
+        from += pageSize
+      }
+
+      setAfiliadosEstructura(allRows)
+    } catch (e) {
+      console.error('Error cargando estructura:', e)
+    } finally {
+      setLoadingEstructura(false)
+    }
+  }
+
+  const coordinadoresDelTemplario = useMemo<EstructuraCoordinador[]>(() => {
+    if (!templarioSeleccionado) return []
+    const key = claveFinal(templarioSeleccionado)
+
+    const mapa: Record<number, EstructuraCoordinador> = {}
+    afiliadosEstructura.forEach((a) => {
+      const rolNorm = normalizarClave(a.rol_afiliado || '')
+      const apNorm = claveFinal(a.afiliado_por || '')
+      if (rolNorm === 'coordinador' && apNorm === key) {
+        mapa[a.id] = { id: a.id, nombre: nombreCompletoAfiliado(a), afiliados: [] }
+      }
+    })
+
+    afiliadosEstructura.forEach((a) => {
+      if (a.coordinador_id != null && mapa[a.coordinador_id]) {
+        mapa[a.coordinador_id].afiliados.push({ id: a.id, nombre: nombreCompletoAfiliado(a) })
+      }
+    })
+
+    return Object.values(mapa).sort((a, b) => b.afiliados.length - a.afiliados.length)
+  }, [templarioSeleccionado, afiliadosEstructura])
+
+  const totalAfiliadosEstructura = coordinadoresDelTemplario.reduce((s, c) => s + c.afiliados.length, 0)
 
   const cargarEstadisticas = async (rol: string, userId: string) => {
     setLoading(true)
@@ -499,7 +614,7 @@ export default function EstadisticasPage() {
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-5">
 
         {mostrarTemplarioTab && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setVista('sector')}
               className="text-sm px-4 py-2 rounded-lg border font-medium transition-all"
@@ -515,6 +630,14 @@ export default function EstadisticasPage() {
                 ? { background: '#004466', color: 'white', borderColor: '#004466' }
                 : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
               Por templario
+            </button>
+            <button
+              onClick={seleccionarVistaEstructura}
+              className="text-sm px-4 py-2 rounded-lg border font-medium transition-all"
+              style={vista === 'estructura'
+                ? { background: '#004466', color: 'white', borderColor: '#004466' }
+                : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
+              Estructura
             </button>
           </div>
         )}
@@ -922,6 +1045,129 @@ export default function EstadisticasPage() {
                 </div>
               )}
             </div>
+          </>
+        )}
+
+        {vista === 'estructura' && mostrarTemplarioTab && (
+          <>
+            <div className="card space-y-3">
+              <div>
+                <h2 className="font-semibold text-base mb-1" style={{ color: 'var(--texto-principal)' }}>Estructura</h2>
+                <p className="text-sm" style={{ color: 'var(--texto-secundario)' }}>
+                  Meta: {META_COORDINADORES_POR_TEMPLARIO} coordinadores por templario, {META_AFILIADOS_POR_COORDINADOR} afiliados por coordinador
+                </p>
+              </div>
+
+              <select
+                value={templarioSeleccionado}
+                onChange={(e) => { setTemplarioSeleccionado(e.target.value); setExpandidoCoordinador(null) }}
+                className="w-full text-sm px-3 py-2 rounded-lg border"
+                style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-principal)' }}
+                disabled={loadingEstructura}
+              >
+                <option value="">
+                  {loadingEstructura ? 'Cargando templarios...' : 'Selecciona un templario'}
+                </option>
+                {templarios.map((t) => (
+                  <option key={t.id} value={t.nombre}>{t.nombre}</option>
+                ))}
+              </select>
+            </div>
+
+            {loadingEstructura ? (
+              <div className="card text-center py-10">
+                <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto" style={{ borderColor: '#004466' }}></div>
+              </div>
+            ) : !templarioSeleccionado ? (
+              <div className="card text-center py-10">
+                <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>Selecciona un templario</p>
+                <p className="text-sm mt-1" style={{ color: 'var(--texto-secundario)' }}>Para ver su estructura de coordinadores y afiliados.</p>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="card text-center">
+                    <p className="text-3xl font-bold" style={{ color: coordinadoresDelTemplario.length >= META_COORDINADORES_POR_TEMPLARIO ? '#166534' : '#004466' }}>
+                      {coordinadoresDelTemplario.length}
+                      <span className="text-base font-medium" style={{ color: 'var(--texto-secundario)' }}> / {META_COORDINADORES_POR_TEMPLARIO}</span>
+                    </p>
+                    <p className="text-xs mt-1 font-medium" style={{ color: 'var(--texto-secundario)' }}>Coordinadores</p>
+                  </div>
+                  <div className="card text-center">
+                    <p className="text-3xl font-bold" style={{ color: '#004466' }}>{totalAfiliadosEstructura}</p>
+                    <p className="text-xs mt-1 font-medium" style={{ color: 'var(--texto-secundario)' }}>Afiliados asignados a coordinador</p>
+                  </div>
+                </div>
+
+                {coordinadoresDelTemplario.length === 0 ? (
+                  <div className="card text-center py-10">
+                    <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>Sin coordinadores</p>
+                    <p className="text-sm mt-1" style={{ color: 'var(--texto-secundario)' }}>
+                      Este templario todavia no tiene afiliados con rol Coordinador.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {coordinadoresDelTemplario.map((c) => {
+                      const abierto = expandidoCoordinador === c.id
+                      const cumpleMeta = c.afiliados.length >= META_AFILIADOS_POR_COORDINADOR
+                      return (
+                        <div key={c.id} className="card hover:shadow-md transition-shadow">
+                          <button className="w-full text-left" onClick={() => setExpandidoCoordinador(abierto ? null : c.id)}>
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 text-sm" style={{ background: '#166534' }}>
+                                  {c.nombre.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-sm leading-snug" style={{ color: 'var(--texto-principal)' }}>{c.nombre}</p>
+                                  <p className="text-xs mt-0.5" style={{ color: cumpleMeta ? '#166534' : '#b45309' }}>
+                                    {cumpleMeta ? 'Cumple la meta' : `Faltan ${META_AFILIADOS_POR_COORDINADOR - c.afiliados.length} para la meta`}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <div className="text-right">
+                                  <p className="font-bold text-lg leading-none" style={{ color: '#166534' }}>{c.afiliados.length}</p>
+                                  <p className="text-xs" style={{ color: 'var(--texto-secundario)' }}>/ {META_AFILIADOS_POR_COORDINADOR}</p>
+                                </div>
+                                <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform ${abierto ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'var(--texto-secundario)' }}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </div>
+                            </div>
+
+                            <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background: '#dcfce7' }}>
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{ width: `${Math.min((c.afiliados.length / META_AFILIADOS_POR_COORDINADOR) * 100, 100)}%`, background: '#166534' }}
+                              />
+                            </div>
+                          </button>
+
+                          {abierto && (
+                            <div className="mt-4 pt-4 border-t space-y-1.5" style={{ borderColor: 'var(--color-borde)' }}>
+                              <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--texto-secundario)' }}>
+                                Afiliados asignados
+                              </p>
+                              {c.afiliados.length === 0 ? (
+                                <p className="text-sm italic" style={{ color: 'var(--texto-secundario)' }}>Sin afiliados asignados todavia.</p>
+                              ) : (
+                                c.afiliados.map((a) => (
+                                  <div key={a.id} className="flex items-center px-3 py-2 rounded-lg" style={{ background: '#f8fafc' }}>
+                                    <span className="text-xs font-medium" style={{ color: 'var(--texto-principal)' }}>{a.nombre}</span>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
+            )}
           </>
         )}
       </main>
