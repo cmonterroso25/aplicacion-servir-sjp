@@ -17,9 +17,14 @@ const colorRol: Record<string, { bg: string; color: string }> = {
 const ROLES = ['Simpatizante', 'Organizador', 'Guerrero', 'Coordinador', 'Templario']
 const GENEROS = ['Masculino', 'Femenino']
 
-// Roles de perfil (login) que solo ven / filtran por sus propios afiliados.
+// Roles de perfil (login) que solo ven / filtran por sus propios afiliados
+// (comparando por encargado_id = su propio user id).
 // OJO: esto es distinto del rol_afiliado "Coordinador" del afiliado en sí.
 const ROLES_SOLO_PROPIOS = ['colaborador', 'encargado', 'templario']
+
+// Roles de perfil (login) que solo ven los afiliados donde "afiliado_por"
+// coincide con su propio nombre (mismo valor que se guarda al afiliar).
+const ROLES_FILTRAN_POR_AFILIADO_POR = ['pentagono']
 
 // Roles de perfil (login) que NO pueden editar afiliados (ni siquiera los propios)
 const ROLES_SIN_EDICION = ['colaborador', 'encargado', 'lider']
@@ -27,12 +32,15 @@ const ROLES_SIN_EDICION = ['colaborador', 'encargado', 'lider']
 // Roles de perfil (login) que pueden asignar/editar el campo Coordinador
 const ROLES_ASIGNAN_COORDINADOR = ['admin', 'pentagono']
 
+// Roles de perfil (login) que pueden eliminar afiliados
+const ROLES_ELIMINAN = ['admin']
+
 const SELECT_AFILIADOS =
   '*, sectores(nombre, encargado_nombre), perfiles(nombre_completo, email), coordinador:afiliados!coordinador_id(id, primer_apellido, segundo_apellido, primer_nombre, segundo_nombre)'
 
 const PAGE_SIZE = 100
 
-type SortField = 'nombre' | 'dpi' | 'telefono' | 'fecha_nacimiento' | 'edad' | 'genero' | 'rol' | 'sector' | 'ubicacion' | 'encargado' | 'afiliado_por' | 'coordinador' | 'vota' | 'fecha_registro'
+type SortField = 'nombre' | 'dpi' | 'telefono' | 'fecha_nacimiento' | 'edad' | 'genero' | 'rol' | 'sector' | 'ubicacion' | 'encargado' | 'afiliado_por' | 'coordinador' | 'vota' | 'fiscal' | 'fecha_registro'
 type SortDir = 'asc' | 'desc'
 
 type FiltrosState = {
@@ -48,13 +56,14 @@ type FiltrosState = {
   encargado: string
   afiliado_por: string
   vota: string
+  fiscal: string
   fecha_registro: string
 }
 
 const FILTROS_VACIOS: FiltrosState = {
   nombre: '', dpi: '', telefono: '', fecha_nacimiento: '', edad: '',
   genero: '', rol: '', sector: '', ubicacion: '',
-  encargado: '', afiliado_por: '', vota: '', fecha_registro: '',
+  encargado: '', afiliado_por: '', vota: '', fiscal: '', fecha_registro: '',
 }
 
 type Draft = {
@@ -73,6 +82,7 @@ type Draft = {
   afiliado_por: string
   coordinador_id: string
   vota_en_pinula: boolean
+  es_fiscal: boolean
 }
 
 type CoordinadorOpcion = {
@@ -139,6 +149,7 @@ export default function AfiliadosPage() {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [guardandoEdicion, setGuardandoEdicion] = useState(false)
   const [errorEdicion, setErrorEdicion] = useState('')
+  const [eliminandoId, setEliminandoId] = useState<number | null>(null)
 
   const cargarCoordinadores = useCallback(async () => {
     const { data } = await supabase
@@ -166,7 +177,8 @@ export default function AfiliadosPage() {
 
       await cargarCoordinadores()
 
-      await cargarAfiliados(p?.rol || 'encargado', session.user.id, '', FILTROS_VACIOS, 1)
+      const identificadorPropio = p?.nombre_completo || p?.email || ''
+      await cargarAfiliados(p?.rol || 'encargado', session.user.id, identificadorPropio, '', FILTROS_VACIOS, 1)
     }
     init()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -178,6 +190,7 @@ export default function AfiliadosPage() {
   const cargarAfiliados = useCallback(async (
     rol: string,
     userId: string,
+    identificadorPropio: string,
     termino: string,
     filtrosActuales: FiltrosState,
     paginaActual: number
@@ -193,6 +206,7 @@ export default function AfiliadosPage() {
         .order('primer_apellido')
 
       if (ROLES_SOLO_PROPIOS.includes(rol)) q = q.eq('encargado_id', userId)
+      if (ROLES_FILTRAN_POR_AFILIADO_POR.includes(rol)) q = q.eq('afiliado_por', identificadorPropio)
 
       // Buscador principal (arriba): solo DPI
       if (termino.trim().length >= 2) {
@@ -243,6 +257,9 @@ export default function AfiliadosPage() {
           q = q.or('vota_en_pinula.eq.false,vota_en_pinula.is.null')
         }
       }
+      if (filtrosActuales.fiscal) {
+        q = q.eq('es_fiscal', filtrosActuales.fiscal === 'si')
+      }
       if (filtrosActuales.nombre.trim()) {
         const t = filtrosActuales.nombre.trim()
         q = q.or(
@@ -279,16 +296,18 @@ export default function AfiliadosPage() {
     }
   }, [sectoresList])
 
+  const identificadorPropio = perfil?.nombre_completo || perfil?.email || ''
+
   const handleBuscar = () => {
     setPage(1)
-    if (perfil) cargarAfiliados(perfil.rol, perfil.id, busqueda, filtros, 1)
+    if (perfil) cargarAfiliados(perfil.rol, perfil.id, identificadorPropio, busqueda, filtros, 1)
   }
 
   const irAPagina = (p: number) => {
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
     if (p < 1 || p > totalPages || p === page) return
     setPage(p)
-    if (perfil) cargarAfiliados(perfil.rol, perfil.id, busqueda, filtros, p)
+    if (perfil) cargarAfiliados(perfil.rol, perfil.id, identificadorPropio, busqueda, filtros, p)
   }
 
   const formatNombre = (a: Afiliado) =>
@@ -311,7 +330,7 @@ export default function AfiliadosPage() {
   const limpiarFiltros = () => {
     setFiltros(FILTROS_VACIOS)
     setPage(1)
-    if (perfil) cargarAfiliados(perfil.rol, perfil.id, busqueda, FILTROS_VACIOS, 1)
+    if (perfil) cargarAfiliados(perfil.rol, perfil.id, identificadorPropio, busqueda, FILTROS_VACIOS, 1)
   }
 
   const handleSort = (field: SortField) => {
@@ -336,7 +355,7 @@ export default function AfiliadosPage() {
     }
     const timer = setTimeout(() => {
       setPage(1)
-      cargarAfiliados(perfil.rol, perfil.id, busqueda, filtros, 1)
+      cargarAfiliados(perfil.rol, perfil.id, identificadorPropio, busqueda, filtros, 1)
     }, 450)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -372,6 +391,7 @@ export default function AfiliadosPage() {
       case 'afiliado_por': return ((a as any).afiliado_por || '').toLowerCase()
       case 'coordinador': return (formatNombreCoordinador((a as any).coordinador) || '').toLowerCase()
       case 'vota': return a.vota_en_pinula ? '1' : '0'
+      case 'fiscal': return (a as any).es_fiscal ? '1' : '0'
       case 'fecha_registro': return (a.created_at as any) || ''
       default: return ''
     }
@@ -416,6 +436,7 @@ export default function AfiliadosPage() {
       afiliado_por: (a as any).afiliado_por || '',
       coordinador_id: (a as any).coordinador_id ? String((a as any).coordinador_id) : '',
       vota_en_pinula: a.vota_en_pinula ?? true,
+      es_fiscal: (a as any).es_fiscal ?? false,
     })
   }
 
@@ -466,6 +487,7 @@ export default function AfiliadosPage() {
         afiliado_por: draft.afiliado_por || null,
         coordinador_id: draft.coordinador_id ? parseInt(draft.coordinador_id) : null,
         vota_en_pinula: draft.vota_en_pinula,
+        es_fiscal: draft.es_fiscal,
       })
       .eq('id', editandoId)
       .select(SELECT_AFILIADOS)
@@ -488,6 +510,25 @@ export default function AfiliadosPage() {
     setDraft(null)
   }
 
+  const eliminarAfiliado = async (a: Afiliado) => {
+    if (!ROLES_ELIMINAN.includes(perfil?.rol || '')) return
+    const nombre = formatNombre(a)
+    if (!window.confirm(`¿Eliminar a ${nombre}? Esta acción no se puede deshacer.`)) return
+    setEliminandoId(a.id)
+    const { error } = await supabase.from('afiliados').delete().eq('id', a.id)
+    setEliminandoId(null)
+    if (error) {
+      window.alert('Error al eliminar: ' + error.message)
+      return
+    }
+    setAfiliados((prev) => prev.filter((x) => x.id !== a.id))
+    setTotal((prev) => Math.max(0, prev - 1))
+    if (editandoId === a.id) {
+      setEditandoId(null)
+      setDraft(null)
+    }
+  }
+
   const thBase = "text-left px-3 py-2 font-semibold whitespace-nowrap cursor-pointer select-none hover:bg-gray-100"
   const inputFiltro = "w-full text-xs border rounded px-2 py-1"
   const inputFiltroStyle = { borderColor: 'var(--color-borde)' }
@@ -496,8 +537,10 @@ export default function AfiliadosPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const puedeEditar = !ROLES_SIN_EDICION.includes(perfil?.rol || '')
+  const puedeEliminar = ROLES_ELIMINAN.includes(perfil?.rol || '')
   const puedeEditarCoordinador = ROLES_ASIGNAN_COORDINADOR.includes(perfil?.rol || '')
   const muestraColumnaEncargado = !ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') && perfil?.rol !== 'lider'
+  const muestraSoloPropios = ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') || ROLES_FILTRAN_POR_AFILIADO_POR.includes(perfil?.rol || '')
 
   const opcionesUbicacionDraft = draft?.tipo_ubicacion
     ? (OPCIONES_UBICACION[draft.tipo_ubicacion as TipoUbicacion] || [])
@@ -512,7 +555,7 @@ export default function AfiliadosPage() {
     )
   }, [coordinadoresList, draft, editandoId])
 
-  const totalColumnas = 13 + (muestraColumnaEncargado ? 1 : 0) + (modoEdicion && puedeEditar ? 1 : 0)
+  const totalColumnas = 14 + (muestraColumnaEncargado ? 1 : 0) + (modoEdicion && puedeEditar ? 1 : 0)
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-fondo)' }}>
@@ -528,7 +571,7 @@ export default function AfiliadosPage() {
             <div>
               <h1 className="font-bold text-sm" style={{ color: '#004466' }}>Afiliados</h1>
               <p className="text-xs" style={{ color: 'var(--texto-secundario)' }}>
-                {ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') ? 'Mis afiliados' : 'Todos los afiliados'}
+                {muestraSoloPropios ? 'Mis afiliados' : 'Todos los afiliados'}
               </p>
             </div>
           </div>
@@ -552,7 +595,7 @@ export default function AfiliadosPage() {
               placeholder="Buscar por DPI (en toda la base de datos)..."
             />
             {busqueda && (
-              <button onClick={() => { setBusqueda(''); setPage(1); if (perfil) cargarAfiliados(perfil.rol, perfil.id, '', filtros, 1) }} className="px-3 rounded-lg border text-sm" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+              <button onClick={() => { setBusqueda(''); setPage(1); if (perfil) cargarAfiliados(perfil.rol, perfil.id, identificadorPropio, '', filtros, 1) }} className="px-3 rounded-lg border text-sm" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
                 X
               </button>
             )}
@@ -610,6 +653,7 @@ export default function AfiliadosPage() {
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('afiliado_por')}>Afiliado por<SortIcon field="afiliado_por" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('coordinador')}>Coordinador<SortIcon field="coordinador" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('vota')}>Vota en Pinula<SortIcon field="vota" /></th>
+                  <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('fiscal')}>Fiscal<SortIcon field="fiscal" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('fecha_registro')}>F. Registro<SortIcon field="fecha_registro" /></th>
                   {modoEdicion && puedeEditar && (
                     <th className="text-left px-3 py-2 font-semibold whitespace-nowrap" style={{ color: 'var(--texto-secundario)' }}>Acciones</th>
@@ -663,6 +707,13 @@ export default function AfiliadosPage() {
                   <th className="px-3 py-1.5"></th>
                   <th className="px-3 py-1.5">
                     <select value={filtros.vota} onChange={(e) => handleFiltroChange('vota', e.target.value)} className={inputFiltro} style={inputFiltroStyle}>
+                      <option value="">Todos</option>
+                      <option value="si">Sí</option>
+                      <option value="no">No</option>
+                    </select>
+                  </th>
+                  <th className="px-3 py-1.5">
+                    <select value={filtros.fiscal} onChange={(e) => handleFiltroChange('fiscal', e.target.value)} className={inputFiltro} style={inputFiltroStyle}>
                       <option value="">Todos</option>
                       <option value="si">Sí</option>
                       <option value="no">No</option>
@@ -795,6 +846,12 @@ export default function AfiliadosPage() {
                               <option value="no">No</option>
                             </select>
                           </td>
+                          <td className="px-3 py-2">
+                            <select className={inputEdicion} style={inputEdicionStyle} value={draft.es_fiscal ? 'si' : 'no'} onChange={(e) => setDraft({ ...draft, es_fiscal: e.target.value === 'si' })}>
+                              <option value="si">Sí</option>
+                              <option value="no">No</option>
+                            </select>
+                          </td>
                           <td className="px-3 py-2 text-xs" style={{ color: 'var(--texto-secundario)' }}>{formatFecha(a.created_at as any) || '—'}</td>
                           <td className="px-3 py-2">
                             <div className="flex flex-col gap-1.5">
@@ -804,6 +861,15 @@ export default function AfiliadosPage() {
                               <button onClick={cancelarEdicion} className="text-xs px-2 py-1 rounded-lg border font-medium" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
                                 Cancelar
                               </button>
+                              {puedeEliminar && (
+                                <button
+                                  onClick={() => eliminarAfiliado(a)}
+                                  disabled={eliminandoId === a.id}
+                                  className="text-xs px-2 py-1 rounded-lg font-semibold text-white disabled:opacity-50"
+                                  style={{ background: '#9b1c3a' }}>
+                                  {eliminandoId === a.id ? 'Eliminando...' : 'Eliminar'}
+                                </button>
+                              )}
                               {errorEdicion && (
                                 <p className="text-xs text-red-600 mt-1">{errorEdicion}</p>
                               )}
@@ -852,12 +918,30 @@ export default function AfiliadosPage() {
                             {a.vota_en_pinula ? 'Sí' : 'No'}
                           </span>
                         </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          <span
+                            className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full"
+                            style={{ background: (a as any).es_fiscal ? '#dcfce7' : '#fee2e2', color: (a as any).es_fiscal ? '#166534' : '#991b1b' }}>
+                            {(a as any).es_fiscal ? 'Sí' : 'No'}
+                          </span>
+                        </td>
                         <td className="px-3 py-2.5 whitespace-nowrap">{formatFecha(a.created_at as any) || '—'}</td>
                         {modoEdicion && puedeEditar && (
                           <td className="px-3 py-2.5 whitespace-nowrap">
-                            <button onClick={() => iniciarEdicion(a)} className="text-xs px-2.5 py-1 rounded-lg font-semibold text-white" style={{ background: '#004466' }}>
-                              Editar
-                            </button>
+                            <div className="flex gap-1.5">
+                              <button onClick={() => iniciarEdicion(a)} className="text-xs px-2.5 py-1 rounded-lg font-semibold text-white" style={{ background: '#004466' }}>
+                                Editar
+                              </button>
+                              {puedeEliminar && (
+                                <button
+                                  onClick={() => eliminarAfiliado(a)}
+                                  disabled={eliminandoId === a.id}
+                                  className="text-xs px-2.5 py-1 rounded-lg font-semibold text-white disabled:opacity-50"
+                                  style={{ background: '#9b1c3a' }}>
+                                  {eliminandoId === a.id ? '...' : 'Eliminar'}
+                                </button>
+                              )}
+                            </div>
                           </td>
                         )}
                       </tr>

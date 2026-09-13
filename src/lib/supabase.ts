@@ -49,6 +49,7 @@ export type Afiliado = {
   afiliado_por: string | null
   rol_afiliado: string | null
   coordinador_id: number | null
+  es_fiscal: boolean
 }
 export type AfiliadoConRelaciones = Afiliado & {
   sectores: { nombre: string; encargado_nombre: string | null } | null
