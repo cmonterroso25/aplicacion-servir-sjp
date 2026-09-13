@@ -10,22 +10,29 @@ const colorRol: Record<string, { bg: string; color: string }> = {
   Simpatizante: { bg: '#e0f7fa', color: '#004466' },
   Organizador:  { bg: '#fff3e0', color: '#b45309' },
   Guerrero:     { bg: '#fce4ec', color: '#9b1c3a' },
-  Líder:        { bg: '#e8f5e9', color: '#166534' },
+  Coordinador:  { bg: '#e8f5e9', color: '#166534' },
   Templario:    { bg: '#ede7f6', color: '#4527a0' },
 }
 
-const ROLES = ['Simpatizante', 'Organizador', 'Guerrero', 'Líder', 'Templario']
+const ROLES = ['Simpatizante', 'Organizador', 'Guerrero', 'Coordinador', 'Templario']
 const GENEROS = ['Masculino', 'Femenino']
 
-// Roles que solo ven / filtran por sus propios afiliados
+// Roles de perfil (login) que solo ven / filtran por sus propios afiliados.
+// OJO: esto es distinto del rol_afiliado "Coordinador" del afiliado en sí.
 const ROLES_SOLO_PROPIOS = ['colaborador', 'encargado', 'templario']
 
-// Roles que NO pueden editar afiliados (ni siquiera los propios)
+// Roles de perfil (login) que NO pueden editar afiliados (ni siquiera los propios)
 const ROLES_SIN_EDICION = ['colaborador', 'encargado', 'lider']
+
+// Roles de perfil (login) que pueden asignar/editar el campo Coordinador
+const ROLES_ASIGNAN_COORDINADOR = ['admin', 'pentagono']
+
+const SELECT_AFILIADOS =
+  '*, sectores(nombre, encargado_nombre), perfiles(nombre_completo, email), coordinador:afiliados!coordinador_id(id, primer_apellido, segundo_apellido, primer_nombre, segundo_nombre)'
 
 const PAGE_SIZE = 100
 
-type SortField = 'nombre' | 'dpi' | 'telefono' | 'fecha_nacimiento' | 'edad' | 'genero' | 'rol' | 'sector' | 'ubicacion' | 'encargado' | 'afiliado_por' | 'vota' | 'fecha_registro'
+type SortField = 'nombre' | 'dpi' | 'telefono' | 'fecha_nacimiento' | 'edad' | 'genero' | 'rol' | 'sector' | 'ubicacion' | 'encargado' | 'afiliado_por' | 'coordinador' | 'vota' | 'fecha_registro'
 type SortDir = 'asc' | 'desc'
 
 type FiltrosState = {
@@ -64,7 +71,17 @@ type Draft = {
   tipo_ubicacion: string
   nombre_ubicacion: string
   afiliado_por: string
+  coordinador_id: string
   vota_en_pinula: boolean
+}
+
+type CoordinadorOpcion = {
+  id: number
+  primer_apellido: string
+  segundo_apellido: string | null
+  primer_nombre: string
+  segundo_nombre: string | null
+  afiliado_por: string | null
 }
 
 function generarPaginas(actual: number, total: number): (number | string)[] {
@@ -95,12 +112,18 @@ function parseFechaInput(valor: string): string | null {
   return iso
 }
 
+function formatNombreCoordinador(c: CoordinadorOpcion | null | undefined) {
+  if (!c) return null
+  return [c.primer_apellido, c.segundo_apellido, c.primer_nombre, c.segundo_nombre].filter(Boolean).join(' ')
+}
+
 export default function AfiliadosPage() {
   const router = useRouter()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [afiliados, setAfiliados] = useState<Afiliado[]>([])
   const [sectoresList, setSectoresList] = useState<Sector[]>([])
   const [afiliadoPorList, setAfiliadoPorList] = useState<{ id: number; nombre: string }[]>([])
+  const [coordinadoresList, setCoordinadoresList] = useState<CoordinadorOpcion[]>([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [total, setTotal] = useState(0)
@@ -117,6 +140,15 @@ export default function AfiliadosPage() {
   const [guardandoEdicion, setGuardandoEdicion] = useState(false)
   const [errorEdicion, setErrorEdicion] = useState('')
 
+  const cargarCoordinadores = useCallback(async () => {
+    const { data } = await supabase
+      .from('afiliados')
+      .select('id, primer_apellido, segundo_apellido, primer_nombre, segundo_nombre, afiliado_por')
+      .eq('rol_afiliado', 'Coordinador')
+      .order('primer_apellido')
+    setCoordinadoresList((data as any) || [])
+  }, [])
+
   useEffect(() => {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -132,9 +164,12 @@ export default function AfiliadosPage() {
       const { data: apData } = await supabase.from('afiliado_por').select('*').order('nombre')
       setAfiliadoPorList(apData || [])
 
+      await cargarCoordinadores()
+
       await cargarAfiliados(p?.rol || 'encargado', session.user.id, '', FILTROS_VACIOS, 1)
     }
     init()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router])
 
   // Construye y ejecuta la consulta a Supabase aplicando busqueda (DPI) y
@@ -154,7 +189,7 @@ export default function AfiliadosPage() {
 
       let q = supabase
         .from('afiliados')
-        .select('*, sectores(nombre, encargado_nombre), perfiles(nombre_completo, email)', { count: 'exact' })
+        .select(SELECT_AFILIADOS, { count: 'exact' })
         .order('primer_apellido')
 
       if (ROLES_SOLO_PROPIOS.includes(rol)) q = q.eq('encargado_id', userId)
@@ -335,6 +370,7 @@ export default function AfiliadosPage() {
       case 'ubicacion': return (a.nombre_ubicacion || '').toLowerCase()
       case 'encargado': return (((a as any).sectores)?.encargado_nombre || '').toLowerCase()
       case 'afiliado_por': return ((a as any).afiliado_por || '').toLowerCase()
+      case 'coordinador': return (formatNombreCoordinador((a as any).coordinador) || '').toLowerCase()
       case 'vota': return a.vota_en_pinula ? '1' : '0'
       case 'fecha_registro': return (a.created_at as any) || ''
       default: return ''
@@ -378,6 +414,7 @@ export default function AfiliadosPage() {
       tipo_ubicacion: a.tipo_ubicacion || '',
       nombre_ubicacion: a.nombre_ubicacion || '',
       afiliado_por: (a as any).afiliado_por || '',
+      coordinador_id: (a as any).coordinador_id ? String((a as any).coordinador_id) : '',
       vota_en_pinula: a.vota_en_pinula ?? true,
     })
   }
@@ -427,23 +464,25 @@ export default function AfiliadosPage() {
         tipo_ubicacion: draft.tipo_ubicacion || null,
         nombre_ubicacion: draft.nombre_ubicacion || null,
         afiliado_por: draft.afiliado_por || null,
+        coordinador_id: draft.coordinador_id ? parseInt(draft.coordinador_id) : null,
         vota_en_pinula: draft.vota_en_pinula,
       })
       .eq('id', editandoId)
-      .select('*, sectores(nombre, encargado_nombre), perfiles(nombre_completo, email)')
+      .select(SELECT_AFILIADOS)
       .single()
 
     if (err) {
       if ((err as any).code === '23505') {
         setErrorEdicion('Esta persona ya se encuentra afiliada')
       } else {
-        setErrorEdicion('Error al guardar los cambios. Intenta de nuevo.')
+        setErrorEdicion(err.message || 'Error al guardar los cambios. Intenta de nuevo.')
       }
       setGuardandoEdicion(false)
       return
     }
 
     setAfiliados((prev) => prev.map((a) => (a.id === editandoId ? (actualizado as any) : a)))
+    await cargarCoordinadores()
     setGuardandoEdicion(false)
     setEditandoId(null)
     setDraft(null)
@@ -457,11 +496,23 @@ export default function AfiliadosPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const puedeEditar = !ROLES_SIN_EDICION.includes(perfil?.rol || '')
+  const puedeEditarCoordinador = ROLES_ASIGNAN_COORDINADOR.includes(perfil?.rol || '')
   const muestraColumnaEncargado = !ROLES_SOLO_PROPIOS.includes(perfil?.rol || '') && perfil?.rol !== 'lider'
 
   const opcionesUbicacionDraft = draft?.tipo_ubicacion
     ? (OPCIONES_UBICACION[draft.tipo_ubicacion as TipoUbicacion] || [])
     : []
+
+  // Coordinadores candidatos para el afiliado en edición: mismo "afiliado por"
+  // y sin poder elegirse a sí mismo.
+  const opcionesCoordinadorDraft = useMemo(() => {
+    if (!draft) return []
+    return coordinadoresList.filter(
+      (c) => c.afiliado_por === draft.afiliado_por && c.id !== editandoId
+    )
+  }, [coordinadoresList, draft, editandoId])
+
+  const totalColumnas = 13 + (muestraColumnaEncargado ? 1 : 0) + (modoEdicion && puedeEditar ? 1 : 0)
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-fondo)' }}>
@@ -557,6 +608,7 @@ export default function AfiliadosPage() {
                     <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('encargado')}>Encargado del sector<SortIcon field="encargado" /></th>
                   )}
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('afiliado_por')}>Afiliado por<SortIcon field="afiliado_por" /></th>
+                  <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('coordinador')}>Coordinador<SortIcon field="coordinador" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('vota')}>Vota en Pinula<SortIcon field="vota" /></th>
                   <th className={thBase} style={{ color: 'var(--texto-secundario)' }} onClick={() => handleSort('fecha_registro')}>F. Registro<SortIcon field="fecha_registro" /></th>
                   {modoEdicion && puedeEditar && (
@@ -608,6 +660,7 @@ export default function AfiliadosPage() {
                   <th className="px-3 py-1.5">
                     <input type="text" value={filtros.afiliado_por} onChange={(e) => handleFiltroChange('afiliado_por', e.target.value)} placeholder="Filtrar..." className={inputFiltro} style={inputFiltroStyle} />
                   </th>
+                  <th className="px-3 py-1.5"></th>
                   <th className="px-3 py-1.5">
                     <select value={filtros.vota} onChange={(e) => handleFiltroChange('vota', e.target.value)} className={inputFiltro} style={inputFiltroStyle}>
                       <option value="">Todos</option>
@@ -624,7 +677,7 @@ export default function AfiliadosPage() {
               <tbody>
                 {afiliadosOrdenados.length === 0 ? (
                   <tr>
-                    <td colSpan={14} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>
+                    <td colSpan={totalColumnas} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>
                       Ningun afiliado coincide con los filtros aplicados.
                     </td>
                   </tr>
@@ -633,6 +686,7 @@ export default function AfiliadosPage() {
                     const rol = (a as any).rol_afiliado || 'Simpatizante'
                     const estiloRol = colorRol[rol] || colorRol['Simpatizante']
                     const encargadoSector = ((a as any).sectores)?.encargado_nombre
+                    const nombreCoordinador = formatNombreCoordinador((a as any).coordinador)
                     const enEdicion = modoEdicion && puedeEditar && editandoId === a.id && draft
 
                     if (enEdicion) {
@@ -709,10 +763,31 @@ export default function AfiliadosPage() {
                             <td className="px-3 py-2 text-xs" style={{ color: 'var(--texto-secundario)' }}>{encargadoSector || '—'}</td>
                           )}
                           <td className="px-3 py-2">
-                            <select className={inputEdicion} style={inputEdicionStyle} value={draft.afiliado_por} onChange={(e) => setDraft({ ...draft, afiliado_por: e.target.value })}>
+                            <select
+                              className={inputEdicion}
+                              style={inputEdicionStyle}
+                              value={draft.afiliado_por}
+                              onChange={(e) => setDraft({ ...draft, afiliado_por: e.target.value, coordinador_id: '' })}>
                               <option value="">Selecciona...</option>
                               {afiliadoPorList.map((ap) => <option key={ap.id} value={ap.nombre}>{ap.nombre}</option>)}
                             </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            {puedeEditarCoordinador ? (
+                              <select
+                                className={inputEdicion}
+                                style={inputEdicionStyle}
+                                value={draft.coordinador_id}
+                                onChange={(e) => setDraft({ ...draft, coordinador_id: e.target.value })}
+                                disabled={!draft.afiliado_por}>
+                                <option value="">Sin coordinador</option>
+                                {opcionesCoordinadorDraft.map((c) => (
+                                  <option key={c.id} value={c.id}>{formatNombreCoordinador(c)}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="text-xs" style={{ color: 'var(--texto-secundario)' }}>{nombreCoordinador || '—'}</span>
+                            )}
                           </td>
                           <td className="px-3 py-2">
                             <select className={inputEdicion} style={inputEdicionStyle} value={draft.vota_en_pinula ? 'si' : 'no'} onChange={(e) => setDraft({ ...draft, vota_en_pinula: e.target.value === 'si' })}>
@@ -769,6 +844,7 @@ export default function AfiliadosPage() {
                           <td className="px-3 py-2.5 whitespace-nowrap">{encargadoSector || '—'}</td>
                         )}
                         <td className="px-3 py-2.5 whitespace-nowrap">{(a as any).afiliado_por || '—'}</td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">{nombreCoordinador || '—'}</td>
                         <td className="px-3 py-2.5 whitespace-nowrap">
                           <span
                             className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full"

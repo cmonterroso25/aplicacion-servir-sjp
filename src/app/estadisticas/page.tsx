@@ -19,7 +19,7 @@ type EstadisticaSector = {
   simpatizante: number
   organizador: number
   guerrero: number
-  lider: number
+  coordinador: number
   templario: number
   afiliado_por: AfiliadoPorCount[]
 }
@@ -32,7 +32,7 @@ type EstadisticaLegalSector = {
 }
 
 type RolCount = {
-  lider: number
+  coordinador: number
   guerrero: number
   organizador: number
   simpatizante: number
@@ -232,7 +232,7 @@ export default function EstadisticasPage() {
             simpatizante: 0,
             organizador: 0,
             guerrero: 0,
-            lider: 0,
+            coordinador: 0,
             templario: 0,
             afiliado_por: [],
           }
@@ -248,7 +248,7 @@ export default function EstadisticasPage() {
         if (rol_a === 'simpatizante') mapa[key].simpatizante++
         else if (rol_a === 'organizador') mapa[key].organizador++
         else if (rol_a === 'guerrero') mapa[key].guerrero++
-        else if (rol_a === 'lider') mapa[key].lider++
+        else if (rol_a === 'coordinador') mapa[key].coordinador++
         else if (rol_a === 'templario') mapa[key].templario++
 
         const afiliadoPorOriginal = a.afiliado_por || 'Sin registrar'
@@ -373,7 +373,7 @@ export default function EstadisticasPage() {
             vota_pinula: 0,
             no_vota: 0,
             sectores: [],
-            roles: { lider: 0, guerrero: 0, organizador: 0, simpatizante: 0, otro: 0 }
+            roles: { coordinador: 0, guerrero: 0, organizador: 0, simpatizante: 0, otro: 0 }
           }
           variantesPorClave[key] = {}
         }
@@ -391,7 +391,7 @@ export default function EstadisticasPage() {
           mapa[key].sectores.push({ nombre: sectorNombre, total: 1 })
         }
 
-        if (rol.includes('líder') || rol.includes('lider')) mapa[key].roles.lider++
+        if (rol.includes('coordinador')) mapa[key].roles.coordinador++
         else if (rol.includes('guerrero')) mapa[key].roles.guerrero++
         else if (rol.includes('organizador')) mapa[key].roles.organizador++
         else if (rol.includes('simpatizante')) mapa[key].roles.simpatizante++
@@ -479,14 +479,14 @@ export default function EstadisticasPage() {
     simpatizante: '#004466',
     organizador: '#b45309',
     guerrero: '#9b1c3a',
-    lider: '#166534',
+    coordinador: '#166534',
     templario: '#4527a0',
   }
 
   const totalGeneralTemplario = statsTemplarios.reduce((s, e) => s + e.total, 0)
 
   const ROLES_TEMPLARIO = [
-    { key: 'lider',        label: 'Líderes',        color: '#004466', bg: '#e0f7fa' },
+    { key: 'coordinador',  label: 'Coordinadores',  color: '#004466', bg: '#e0f7fa' },
     { key: 'guerrero',     label: 'Guerreros',       color: '#b45309', bg: '#fef3c7' },
     { key: 'organizador',  label: 'Organizadores',   color: '#065f46', bg: '#d1fae5' },
     { key: 'simpatizante', label: 'Simpatizantes',   color: '#6b7280', bg: '#f3f4f6' },
@@ -632,7 +632,7 @@ export default function EstadisticasPage() {
                             { key: 'simpatizante', label: 'Simpatizante', val: e.simpatizante },
                             { key: 'organizador', label: 'Organizador', val: e.organizador },
                             { key: 'guerrero', label: 'Guerrero', val: e.guerrero },
-                            { key: 'lider', label: 'Lider', val: e.lider },
+                            { key: 'coordinador', label: 'Coordinador', val: e.coordinador },
                             { key: 'templario', label: 'Templario', val: e.templario },
                           ].filter(r => r.val > 0).map((r) => (
                             <span key={r.key} className="text-xs font-medium px-2 py-1 rounded-full"

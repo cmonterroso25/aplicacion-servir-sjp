@@ -10,7 +10,7 @@ import NavBar from '@/components/NavBar'
 const ROLES_CON_ACCESO = ['admin', 'pentagono']
 const PAGE_SIZE = 100
 
-const ROLES = ['Simpatizante', 'Organizador', 'Guerrero', 'Líder', 'Templario']
+const ROLES = ['Simpatizante', 'Organizador', 'Guerrero', 'Coordinador', 'Templario']
 const GENEROS = ['Masculino', 'Femenino']
 
 type FiltroEstado = 'todos' | 'vinculados' | 'pendientes'

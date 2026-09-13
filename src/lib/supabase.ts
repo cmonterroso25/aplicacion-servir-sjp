@@ -48,10 +48,18 @@ export type Afiliado = {
   edad: string | null
   afiliado_por: string | null
   rol_afiliado: string | null
+  coordinador_id: number | null
 }
 export type AfiliadoConRelaciones = Afiliado & {
   sectores: { nombre: string; encargado_nombre: string | null } | null
   perfiles: { nombre_completo: string | null; email: string } | null
+  coordinador: {
+    id: number
+    primer_apellido: string
+    segundo_apellido: string | null
+    primer_nombre: string
+    segundo_nombre: string | null
+  } | null
 }
 export type Reunion = {
   id: number
