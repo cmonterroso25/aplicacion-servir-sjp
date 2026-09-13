@@ -23,6 +23,28 @@ const FORM_VACIO: ReunionForm = {
   fecha: '', hora_inicio: '', hora_fin: '', descripcion: ''
 }
 
+async function notificarCita(payload: {
+  tipo: 'nueva_cita' | 'cita_reprogramada'
+  reunionId: number
+  titulo: string
+  encargadoNombre: string | null
+  lugar: string | null
+  fecha: string
+  horaInicio: string
+  descripcion: string | null
+}) {
+  try {
+    await fetch('/api/notificar-cita', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  } catch (err) {
+    // No bloquea el flujo de guardado si falla la notificación.
+    console.error('Error notificando cita por WhatsApp:', err)
+  }
+}
+
 export default function CalendarioPage() {
   const router = useRouter()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
@@ -30,14 +52,14 @@ export default function CalendarioPage() {
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState<ReunionForm>(FORM_VACIO)
-  const [editandoId, setEditandoId] = useState<number | null>(null)  // ← NUEVO
+  const [editandoId, setEditandoId] = useState<number | null>(null)
+  const [reunionOriginal, setReunionOriginal] = useState<Reunion | null>(null)
   const [guardando, setGuardando] = useState(false)
-  const [eliminando, setEliminando] = useState<number | null>(null)  // ← NUEVO
+  const [eliminando, setEliminando] = useState<number | null>(null)
   const [error, setError] = useState('')
   const [mesActual, setMesActual] = useState(new Date())
   const [diaSeleccionado, setDiaSeleccionado] = useState<string | null>(null)
 
-  // ✅ Solo Admin y Pentagono pueden agendar/editar/eliminar reuniones
   const puedeAgendar = perfil?.rol === 'admin' || perfil?.rol === 'pentagono'
 
   useEffect(() => {
@@ -46,8 +68,6 @@ export default function CalendarioPage() {
       if (!session) { router.replace('/login'); return }
       const { data: p } = await supabase.from('perfiles').select('*').eq('id', session.user.id).single()
       if (p) {
-        // ✅ Solo admin y pentagono pueden acceder al calendario;
-        // el resto de roles (lider, templario) se redirige a /afiliados
         if (p.rol !== 'admin' && p.rol !== 'pentagono') { router.replace('/afiliados'); return }
         setPerfil(p)
       }
@@ -88,12 +108,12 @@ export default function CalendarioPage() {
 
   const abrirModal = (fechaInicial = '') => {
     setForm({ ...FORM_VACIO, fecha: fechaInicial })
-    setEditandoId(null)  // ← NUEVO
+    setEditandoId(null)
+    setReunionOriginal(null)
     setError('')
     setModal(true)
   }
 
-  // ← NUEVA FUNCIÓN
   const abrirModalEditar = (r: Reunion) => {
     setForm({
       titulo: r.titulo || '',
@@ -105,6 +125,7 @@ export default function CalendarioPage() {
       descripcion: r.descripcion || '',
     })
     setEditandoId(r.id)
+    setReunionOriginal(r)
     setError('')
     setModal(true)
   }
@@ -118,7 +139,6 @@ export default function CalendarioPage() {
     setError('')
     try {
       if (editandoId) {
-        // ← EDITAR
         const { error: e } = await supabase
           .from('reuniones')
           .update({
@@ -132,24 +152,57 @@ export default function CalendarioPage() {
           })
           .eq('id', editandoId)
         if (e) throw e
+
+        const cambioFechaHora =
+          reunionOriginal &&
+          (reunionOriginal.fecha !== form.fecha || reunionOriginal.hora_inicio !== form.hora_inicio)
+        if (cambioFechaHora) {
+          await notificarCita({
+            tipo: 'cita_reprogramada',
+            reunionId: editandoId,
+            titulo: form.titulo,
+            encargadoNombre: form.encargado_nombre || null,
+            lugar: form.lugar || null,
+            fecha: form.fecha,
+            horaInicio: form.hora_inicio,
+            descripcion: form.descripcion || null,
+          })
+        }
       } else {
-        // INSERTAR
-        const { error: e } = await supabase.from('reuniones').insert({
-          titulo: form.titulo,
-          encargado_nombre: form.encargado_nombre || null,
-          lugar: form.lugar || null,
-          fecha: form.fecha,
-          hora_inicio: form.hora_inicio,
-          hora_fin: form.hora_fin || null,
-          descripcion: form.descripcion || null,
-          tipo: 'general',
-          creado_por: perfil!.id,
-        })
+        const { data: nueva, error: e } = await supabase
+          .from('reuniones')
+          .insert({
+            titulo: form.titulo,
+            encargado_nombre: form.encargado_nombre || null,
+            lugar: form.lugar || null,
+            fecha: form.fecha,
+            hora_inicio: form.hora_inicio,
+            hora_fin: form.hora_fin || null,
+            descripcion: form.descripcion || null,
+            tipo: 'general',
+            creado_por: perfil!.id,
+          })
+          .select('id')
+          .single()
         if (e) throw e
+
+        if (nueva?.id) {
+          await notificarCita({
+            tipo: 'nueva_cita',
+            reunionId: nueva.id,
+            titulo: form.titulo,
+            encargadoNombre: form.encargado_nombre || null,
+            lugar: form.lugar || null,
+            fecha: form.fecha,
+            horaInicio: form.hora_inicio,
+            descripcion: form.descripcion || null,
+          })
+        }
       }
       setModal(false)
       setForm(FORM_VACIO)
       setEditandoId(null)
+      setReunionOriginal(null)
       await cargarReuniones()
     } catch {
       setError('Error al guardar. Intenta de nuevo.')
@@ -158,7 +211,6 @@ export default function CalendarioPage() {
     }
   }
 
-  // ← NUEVA FUNCIÓN
   const eliminarReunion = async (id: number) => {
     if (!confirm('¿Eliminar esta reunión? Esta acción no se puede deshacer.')) return
     setEliminando(id)
@@ -169,7 +221,6 @@ export default function CalendarioPage() {
         .eq('id', id)
       if (e) throw e
       await cargarReuniones()
-      // Si se elimina la última reunión del día seleccionado, limpiar selección
       const quedanReuniones = reuniones.filter(r => r.id !== id && r.fecha === diaSeleccionado)
       if (quedanReuniones.length === 0) setDiaSeleccionado(null)
     } catch {
@@ -191,7 +242,6 @@ export default function CalendarioPage() {
 
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-5">
 
-        {/* Encabezado */}
         <div className="flex items-center justify-between">
           <div>
             <h2 className="font-semibold text-base" style={{ color: 'var(--texto-principal)' }}>Calendario</h2>
@@ -210,7 +260,6 @@ export default function CalendarioPage() {
           )}
         </div>
 
-        {/* Calendario visual */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <button onClick={() => setMesActual(new Date(year, mes - 1, 1))} className="p-1.5 rounded-lg hover:bg-gray-100">
@@ -266,7 +315,6 @@ export default function CalendarioPage() {
           </div>
         </div>
 
-        {/* Reuniones del día seleccionado */}
         {diaSeleccionado && (
           <div>
             <p className="text-sm font-semibold mb-2" style={{ color: 'var(--texto-principal)' }}>
@@ -302,7 +350,6 @@ export default function CalendarioPage() {
           </div>
         )}
 
-        {/* Próximas reuniones */}
         <div>
           <p className="text-sm font-semibold mb-2" style={{ color: 'var(--texto-principal)' }}>Próximas reuniones</p>
           {loading ? (
@@ -337,7 +384,6 @@ export default function CalendarioPage() {
 
       </main>
 
-      {/* Modal agendar / editar */}
       {modal && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-0"
@@ -345,7 +391,6 @@ export default function CalendarioPage() {
           onClick={(e) => { if (e.target === e.currentTarget) setModal(false) }}>
           <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl">
             <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--color-borde)' }}>
-              {/* ← Título dinámico según si edita o crea */}
               <h3 className="font-semibold text-base" style={{ color: 'var(--texto-principal)' }}>
                 {editandoId ? 'Editar reunión' : 'Nueva reunión'}
               </h3>
@@ -406,7 +451,6 @@ export default function CalendarioPage() {
   )
 }
 
-// ← COMPONENTE ACTUALIZADO CON BOTONES
 function ReunionCard({
   r,
   formatHora,
@@ -444,7 +488,6 @@ function ReunionCard({
           </div>
         </div>
 
-        {/* ← BOTONES EDITAR / ELIMINAR */}
         {puedeEditar && (
           <div className="flex gap-1 shrink-0">
             <button

@@ -88,8 +88,15 @@ type EstructuraCoordinador = {
   afiliados: EstructuraAfiliado[]
 }
 
+type ResumenTemplario = {
+  nombre: string
+  coordinadores: number
+  afiliados: number
+}
+
 const META_COORDINADORES_POR_TEMPLARIO = 20
 const META_AFILIADOS_POR_COORDINADOR = 35
+const META_AFILIADOS_TOTAL_TEMPLARIO = META_COORDINADORES_POR_TEMPLARIO * META_AFILIADOS_POR_COORDINADOR
 
 const ROLES_SIN_ACCESO = ['lider', 'colaborador', 'templario']
 const ROLES_LEGALES = ['admin', 'pentagono']
@@ -126,6 +133,58 @@ function nombreCompletoAfiliado(a: RawAfiliadoEstructura): string {
   return [a.primer_nombre, a.segundo_nombre, a.primer_apellido, a.segundo_apellido]
     .filter(Boolean)
     .join(' ')
+}
+
+// ──────────────────────────────────────────────────────────────
+// Anillo de progreso (SVG) — usado en el resumen visual de Estructura
+// ──────────────────────────────────────────────────────────────
+function AnilloProgreso({
+  valor,
+  meta,
+  color,
+  bgColor,
+  label,
+  tamano = 120,
+}: {
+  valor: number
+  meta: number
+  color: string
+  bgColor: string
+  label: string
+  tamano?: number
+}) {
+  const radio = tamano / 2 - 10
+  const circunferencia = 2 * Math.PI * radio
+  const pct = meta > 0 ? Math.min(valor / meta, 1) : 0
+  const offset = circunferencia * (1 - pct)
+  const centro = tamano / 2
+
+  return (
+    <div className="flex flex-col items-center">
+      <svg width={tamano} height={tamano} viewBox={`0 0 ${tamano} ${tamano}`}>
+        <circle cx={centro} cy={centro} r={radio} fill="none" stroke={bgColor} strokeWidth="10" />
+        <circle
+          cx={centro}
+          cy={centro}
+          r={radio}
+          fill="none"
+          stroke={color}
+          strokeWidth="10"
+          strokeDasharray={circunferencia}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${centro} ${centro})`}
+        />
+        <text x={centro} y={centro - 3} textAnchor="middle" fontSize="20" fontWeight="bold" fill={color}>
+          {valor}
+        </text>
+        <text x={centro} y={centro + 15} textAnchor="middle" fontSize="10" fill="#9ca3af">
+          / {meta}
+        </text>
+      </svg>
+      <p className="text-xs font-medium mt-2 text-center" style={{ color: 'var(--texto-secundario)' }}>{label}</p>
+    </div>
+  )
 }
 
 export default function EstadisticasPage() {
@@ -268,6 +327,45 @@ export default function EstadisticasPage() {
   }, [templarioSeleccionado, afiliadosEstructura])
 
   const totalAfiliadosEstructura = coordinadoresDelTemplario.reduce((s, c) => s + c.afiliados.length, 0)
+
+  // ── Resumen comparativo de TODOS los templarios ────────────
+  const resumenTemplarios = useMemo<ResumenTemplario[]>(() => {
+    if (templarios.length === 0) return []
+
+    const porTemplario: Record<string, { nombre: string; coordinadorIds: number[] }> = {}
+    templarios.forEach((t) => {
+      porTemplario[claveFinal(t.nombre)] = { nombre: t.nombre, coordinadorIds: [] }
+    })
+
+    afiliadosEstructura.forEach((a) => {
+      const rolNorm = normalizarClave(a.rol_afiliado || '')
+      const apKey = claveFinal(a.afiliado_por || '')
+      if (rolNorm === 'coordinador' && porTemplario[apKey]) {
+        porTemplario[apKey].coordinadorIds.push(a.id)
+      }
+    })
+
+    const coordinadorATemplario: Record<number, string> = {}
+    Object.entries(porTemplario).forEach(([key, t]) => {
+      t.coordinadorIds.forEach((id) => { coordinadorATemplario[id] = key })
+    })
+
+    const afiliadosPorTemplario: Record<string, number> = {}
+    afiliadosEstructura.forEach((a) => {
+      if (a.coordinador_id != null) {
+        const key = coordinadorATemplario[a.coordinador_id]
+        if (key) afiliadosPorTemplario[key] = (afiliadosPorTemplario[key] || 0) + 1
+      }
+    })
+
+    return Object.entries(porTemplario)
+      .map(([key, t]) => ({
+        nombre: t.nombre,
+        coordinadores: t.coordinadorIds.length,
+        afiliados: afiliadosPorTemplario[key] || 0,
+      }))
+      .sort((a, b) => b.afiliados - a.afiliados)
+  }, [templarios, afiliadosEstructura])
 
   const cargarEstadisticas = async (rol: string, userId: string) => {
     setLoading(true)
@@ -1167,6 +1265,86 @@ export default function EstadisticasPage() {
                   </div>
                 )}
               </>
+            )}
+
+            {/* ────────────────────────────────────────────────────────── */}
+            {/* Tablero resumen: comparativo de TODOS los templarios */}
+            {/* ────────────────────────────────────────────────────────── */}
+            {!loadingEstructura && (
+              <div className="space-y-3 pt-2">
+                <h2 className="font-semibold text-sm" style={{ color: 'var(--texto-principal)' }}>
+                  Resumen general por templario
+                </h2>
+
+                {resumenTemplarios.length === 0 ? (
+                  <div className="card text-center py-10">
+                    <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>No hay templarios registrados</p>
+                  </div>
+                ) : (
+                  <div className="card overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b" style={{ borderColor: 'var(--color-borde)' }}>
+                          <th className="text-left py-2 pr-3 font-semibold" style={{ color: 'var(--texto-secundario)' }}>Templario</th>
+                          <th className="text-right py-2 px-3 font-semibold" style={{ color: 'var(--texto-secundario)' }}>Coordinadores</th>
+                          <th className="text-right py-2 px-3 font-semibold" style={{ color: 'var(--texto-secundario)' }}>Afiliados</th>
+                          <th className="text-right py-2 pl-3 font-semibold" style={{ color: 'var(--texto-secundario)' }}>Prom. / coordinador</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {resumenTemplarios.map((t) => {
+                          const promedio = t.coordinadores > 0 ? Math.round((t.afiliados / t.coordinadores) * 10) / 10 : 0
+                          const cumpleCoordinadores = t.coordinadores >= META_COORDINADORES_POR_TEMPLARIO
+                          return (
+                            <tr
+                              key={t.nombre}
+                              className="border-b last:border-0 cursor-pointer hover:bg-gray-50"
+                              style={{ borderColor: 'var(--color-borde)' }}
+                              onClick={() => { setTemplarioSeleccionado(t.nombre); setExpandidoCoordinador(null); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                            >
+                              <td className="py-2.5 pr-3 font-medium" style={{ color: 'var(--texto-principal)' }}>{t.nombre}</td>
+                              <td className="py-2.5 px-3 text-right font-semibold" style={{ color: cumpleCoordinadores ? '#166534' : '#b45309' }}>
+                                {t.coordinadores} / {META_COORDINADORES_POR_TEMPLARIO}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-semibold" style={{ color: '#004466' }}>{t.afiliados}</td>
+                              <td className="py-2.5 pl-3 text-right" style={{ color: promedio >= META_AFILIADOS_POR_COORDINADOR ? '#166534' : 'var(--texto-secundario)' }}>
+                                {promedio}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ────────────────────────────────────────────────────────── */}
+            {/* Anillo doble: avance del templario seleccionado */}
+            {/* ────────────────────────────────────────────────────────── */}
+            {templarioSeleccionado && !loadingEstructura && (
+              <div className="space-y-3 pt-2">
+                <h2 className="font-semibold text-sm" style={{ color: 'var(--texto-principal)' }}>
+                  Avance visual — {templarioSeleccionado}
+                </h2>
+                <div className="card flex flex-wrap items-center justify-around gap-6 py-6">
+                  <AnilloProgreso
+                    valor={coordinadoresDelTemplario.length}
+                    meta={META_COORDINADORES_POR_TEMPLARIO}
+                    color="#004466"
+                    bgColor="#e0f7fa"
+                    label="Coordinadores"
+                  />
+                  <AnilloProgreso
+                    valor={totalAfiliadosEstructura}
+                    meta={META_AFILIADOS_TOTAL_TEMPLARIO}
+                    color="#166534"
+                    bgColor="#dcfce7"
+                    label="Afiliados asignados (meta ideal)"
+                  />
+                </div>
+              </div>
             )}
           </>
         )}
