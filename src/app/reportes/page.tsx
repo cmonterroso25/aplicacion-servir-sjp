@@ -31,6 +31,14 @@ const mapAfiliado = (a: any, sectoresMap: Record<number, string>) => ({
 
 const ROLES_SIN_ACCESO = ['lider', 'colaborador', 'templario']
 
+// La columna "edad" en afiliados es de tipo text, asi que el rango se
+// filtra en JS convirtiendo a numero (no se puede hacer .gte()/.lte()
+// directo en Supabase sobre un campo de texto sin que compare como string).
+const parseEdad = (valor: any): number | null => {
+  const n = parseInt(String(valor ?? '').trim(), 10)
+  return Number.isNaN(n) ? null : n
+}
+
 export default function ReportesPage() {
   const router = useRouter()
   const [rol, setRol] = useState<string>()
@@ -42,6 +50,8 @@ export default function ReportesPage() {
   const [fechaFin, setFechaFin] = useState('')
   const [sectorId, setSectorId] = useState('')
   const [afiliadoPor, setAfiliadoPor] = useState('')
+  const [edadMin, setEdadMin] = useState('')
+  const [edadMax, setEdadMax] = useState('')
 
   useEffect(() => {
     const init = async () => {
@@ -159,6 +169,47 @@ export default function ReportesPage() {
     }
   }
 
+  const handleExportPorEdad = async () => {
+    const min = parseEdad(edadMin)
+    const max = parseEdad(edadMax)
+
+    if (min === null || max === null) {
+      alert('Ingresa ambas edades (mínima y máxima)')
+      return
+    }
+    if (min > max) {
+      alert('La edad mínima no puede ser mayor que la máxima')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('afiliados')
+        .select('*')
+        .order('primer_apellido')
+
+      if (error) throw error
+
+      const filtrados = (data || []).filter((a) => {
+        const edad = parseEdad((a as any).edad)
+        return edad !== null && edad >= min && edad <= max
+      })
+
+      if (!filtrados.length) {
+        alert('No hay afiliados en ese rango de edad')
+        return
+      }
+
+      const sectoresMap = buildSectoresMap(sectores)
+      exportToExcel(filtrados.map((a) => mapAfiliado(a, sectoresMap)), `afiliados_edad_${min}_${max}`, 'Por Rango de Edad')
+    } catch (err: any) {
+      alert('Error al exportar: ' + err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen" style={{ background: 'var(--fondo)' }}>
       <NavBar rol={rol} />
@@ -237,6 +288,41 @@ export default function ReportesPage() {
             </select>
             <button
               onClick={handleExportPorAfiliadoPor}
+              disabled={loading}
+              className="text-xs px-3 py-2 rounded-lg font-medium text-white disabled:opacity-50"
+              style={{ background: '#004466' }}>
+              Exportar Excel
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--color-borde)' }}>
+          <h2 className="font-semibold text-sm" style={{ color: '#004466' }}>Afiliados por rango de edad</h2>
+          <div className="flex flex-wrap gap-3 items-end">
+            <div>
+              <label className="block text-xs mb-1 text-gray-500">Edad mínima</label>
+              <input
+                type="number"
+                min={0}
+                value={edadMin}
+                onChange={(e) => setEdadMin(e.target.value)}
+                className="border rounded-lg px-2 py-1.5 text-sm w-28"
+                style={{ borderColor: 'var(--color-borde)' }}
+              />
+            </div>
+            <div>
+              <label className="block text-xs mb-1 text-gray-500">Edad máxima</label>
+              <input
+                type="number"
+                min={0}
+                value={edadMax}
+                onChange={(e) => setEdadMax(e.target.value)}
+                className="border rounded-lg px-2 py-1.5 text-sm w-28"
+                style={{ borderColor: 'var(--color-borde)' }}
+              />
+            </div>
+            <button
+              onClick={handleExportPorEdad}
               disabled={loading}
               className="text-xs px-3 py-2 rounded-lg font-medium text-white disabled:opacity-50"
               style={{ background: '#004466' }}>
