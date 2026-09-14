@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, type Perfil } from '@/lib/supabase'
+import { exportToExcel } from '@/lib/exportXlsx'
 import NavBar from '@/components/NavBar'
 
 type AfiliadoPorCount = {
@@ -76,6 +77,7 @@ type RawAfiliadoEstructura = {
   afiliado_por: string | null
   coordinador_id: number | null
   telefono: string | null
+  nombre_ubicacion: string | null
   vota_en_pinula: boolean | null
   es_fiscal: boolean | null
   sectores: { nombre: string } | null
@@ -86,6 +88,8 @@ type EstructuraAfiliado = {
   nombre: string
   telefono: string | null
   sector: string
+  rol: string
+  ubicacion: string
   vota_en_pinula: boolean | null
   es_fiscal: boolean | null
 }
@@ -108,6 +112,8 @@ type FiscalAfiliado = {
   nombre: string
   telefono: string | null
   sector: string
+  rol: string
+  ubicacion: string
   vota_en_pinula: boolean | null
 }
 
@@ -219,26 +225,26 @@ function AfiliadoDetalleCard({
   sector,
   vota_en_pinula,
   es_fiscal,
+  rol,
+  ubicacion,
 }: {
   nombre: string
   telefono: string | null
   sector: string
   vota_en_pinula: boolean | null
   es_fiscal?: boolean | null
+  rol?: string
+  ubicacion?: string
 }) {
   return (
     <div className="px-3 py-2 rounded-lg space-y-1" style={{ background: '#f8fafc' }}>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold" style={{ color: 'var(--texto-principal)' }}>{nombre}</span>
-        {es_fiscal && (
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#e0f7fa', color: '#004466' }}>
-            Fiscal
-          </span>
-        )}
-      </div>
+      <span className="text-xs font-semibold block" style={{ color: 'var(--texto-principal)' }}>{nombre}</span>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]" style={{ color: 'var(--texto-secundario)' }}>
         <span>{telefono || 'Sin telefono'}</span>
         <span>{sector}</span>
+        {ubicacion && <span>{ubicacion}</span>}
+        {rol && <span>{rol}</span>}
+        {typeof es_fiscal === 'boolean' && <span>{es_fiscal ? 'Fiscal: Sí' : 'Fiscal: No'}</span>}
         <span style={{ color: vota_en_pinula ? '#166534' : '#9b1c3a', fontWeight: 500 }}>
           {vota_en_pinula ? 'Vota en Pinula' : 'No vota en Pinula'}
         </span>
@@ -360,7 +366,7 @@ export default function EstadisticasPage() {
       while (hasMore) {
         const { data: page, error } = await supabase
           .from('afiliados')
-          .select('id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, rol_afiliado, afiliado_por, coordinador_id, telefono, vota_en_pinula, es_fiscal, sectores(nombre)')
+          .select('id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, rol_afiliado, afiliado_por, coordinador_id, telefono, nombre_ubicacion, vota_en_pinula, es_fiscal, sectores(nombre)')
           .range(from, from + pageSize - 1)
 
         if (error) throw error
@@ -396,7 +402,7 @@ export default function EstadisticasPage() {
       while (hasMore) {
         const { data: page, error } = await supabase
           .from('afiliados')
-          .select('id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, afiliado_por, telefono, vota_en_pinula, sectores(nombre)')
+          .select('id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, afiliado_por, telefono, rol_afiliado, nombre_ubicacion, vota_en_pinula, sectores(nombre)')
           .eq('es_fiscal', true)
           .range(from, from + pageSize - 1)
 
@@ -434,6 +440,8 @@ export default function EstadisticasPage() {
           nombre: nombreAfiliado,
           telefono: a.telefono ?? null,
           sector: a.sectores?.nombre || 'Sin sector',
+          rol: a.rol_afiliado || 'Simpatizante',
+          ubicacion: a.nombre_ubicacion || 'Sin ubicación',
           vota_en_pinula: a.vota_en_pinula ?? null,
         })
       })
@@ -480,6 +488,8 @@ export default function EstadisticasPage() {
           nombre: nombreCompletoAfiliado(a),
           telefono: a.telefono,
           sector: a.sectores?.nombre || 'Sin sector',
+          rol: a.rol_afiliado || 'Simpatizante',
+          ubicacion: a.nombre_ubicacion || 'Sin ubicación',
           vota_en_pinula: a.vota_en_pinula,
           es_fiscal: a.es_fiscal,
         })
@@ -529,6 +539,114 @@ export default function EstadisticasPage() {
       }))
       .sort((a, b) => b.afiliados - a.afiliados)
   }, [templarios, afiliadosEstructura])
+
+  // ── Export Excel: TODOS los coordinadores (de todos los templarios) con
+  // sus afiliados asignados. No se limita al templario seleccionado en el
+  // filtro de la pantalla.
+  const handleExportEstructura = () => {
+    const mapaCoordinadores: Record<number, { nombre: string; templario: string; afiliados: RawAfiliadoEstructura[] }> = {}
+
+    afiliadosEstructura.forEach((a) => {
+      if (normalizarClave(a.rol_afiliado || '') === 'coordinador') {
+        mapaCoordinadores[a.id] = {
+          nombre: nombreCompletoAfiliado(a),
+          templario: a.afiliado_por || 'Sin registrar',
+          afiliados: [],
+        }
+      }
+    })
+
+    afiliadosEstructura.forEach((a) => {
+      if (a.coordinador_id != null && mapaCoordinadores[a.coordinador_id]) {
+        mapaCoordinadores[a.coordinador_id].afiliados.push(a)
+      }
+    })
+
+    const filas: Record<string, any>[] = []
+    Object.values(mapaCoordinadores)
+      .sort((a, b) => a.templario.localeCompare(b.templario) || a.nombre.localeCompare(b.nombre))
+      .forEach((c) => {
+        if (c.afiliados.length === 0) {
+          filas.push({
+            Templario: c.templario,
+            Coordinador: c.nombre,
+            Afiliado: '—',
+            'Teléfono': '—',
+            Sector: '—',
+            Rol: '—',
+            'Ubicación': '—',
+            'Vota en Pinula': '—',
+            Fiscal: '—',
+          })
+        } else {
+          c.afiliados
+            .slice()
+            .sort((a, b) => nombreCompletoAfiliado(a).localeCompare(nombreCompletoAfiliado(b)))
+            .forEach((a) => {
+              filas.push({
+                Templario: c.templario,
+                Coordinador: c.nombre,
+                Afiliado: nombreCompletoAfiliado(a),
+                'Teléfono': a.telefono || 'Sin registrar',
+                Sector: a.sectores?.nombre || 'Sin sector',
+                Rol: a.rol_afiliado || 'Simpatizante',
+                'Ubicación': a.nombre_ubicacion || 'Sin ubicación',
+                'Vota en Pinula': a.vota_en_pinula ? 'Sí' : 'No',
+                Fiscal: a.es_fiscal ? 'Sí' : 'No',
+              })
+            })
+        }
+      })
+
+    if (filas.length === 0) {
+      window.alert('No hay datos de estructura para exportar.')
+      return
+    }
+
+    exportToExcel(filas, 'estructura_coordinadores', 'Coordinadores y Afiliados')
+  }
+
+  // ── Export Excel: TODOS los templarios con sus afiliados marcados como
+  // Fiscal = Sí. Usa el mismo agrupador (statsFiscales) que ya alimenta las
+  // tarjetas de la pantalla de Fiscales.
+  const handleExportFiscales = () => {
+    const filas: Record<string, any>[] = []
+    statsFiscales
+      .slice()
+      .sort((a, b) => a.afiliado_por.localeCompare(b.afiliado_por))
+      .forEach((t) => {
+        if (t.afiliados.length === 0) {
+          filas.push({
+            Templario: t.afiliado_por,
+            Afiliado: '—',
+            'Teléfono': '—',
+            Sector: '—',
+            Rol: '—',
+            'Ubicación': '—',
+            'Vota en Pinula': '—',
+          })
+        } else {
+          t.afiliados.forEach((a) => {
+            filas.push({
+              Templario: t.afiliado_por,
+              Afiliado: a.nombre,
+              'Teléfono': a.telefono || 'Sin registrar',
+              Sector: a.sector,
+              Rol: a.rol,
+              'Ubicación': a.ubicacion,
+              'Vota en Pinula': a.vota_en_pinula ? 'Sí' : 'No',
+            })
+          })
+        }
+      })
+
+    if (filas.length === 0) {
+      window.alert('No hay datos de fiscales para exportar.')
+      return
+    }
+
+    exportToExcel(filas, 'fiscales_templarios', 'Fiscales por Templario')
+  }
 
   const cargarEstadisticas = async (rol: string, userId: string) => {
     setLoading(true)
@@ -1322,11 +1440,20 @@ export default function EstadisticasPage() {
         {vista === 'estructura' && mostrarTemplarioTab && (
           <>
             <div className="card space-y-3">
-              <div>
-                <h2 className="font-semibold text-base mb-1" style={{ color: 'var(--texto-principal)' }}>Estructura</h2>
-                <p className="text-sm" style={{ color: 'var(--texto-secundario)' }}>
-                  Meta: {META_COORDINADORES_POR_TEMPLARIO} coordinadores por templario, {META_AFILIADOS_POR_COORDINADOR} afiliados por coordinador
-                </p>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold text-base mb-1" style={{ color: 'var(--texto-principal)' }}>Estructura</h2>
+                  <p className="text-sm" style={{ color: 'var(--texto-secundario)' }}>
+                    Meta: {META_COORDINADORES_POR_TEMPLARIO} coordinadores por templario, {META_AFILIADOS_POR_COORDINADOR} afiliados por coordinador
+                  </p>
+                </div>
+                <button
+                  onClick={handleExportEstructura}
+                  disabled={loadingEstructura || afiliadosEstructura.length === 0}
+                  className="text-xs px-3 py-2 rounded-lg font-semibold text-white disabled:opacity-50 flex-shrink-0"
+                  style={{ background: '#166534' }}>
+                  Exportar Excel
+                </button>
               </div>
 
               <select
@@ -1432,6 +1559,8 @@ export default function EstadisticasPage() {
                                     sector={a.sector}
                                     vota_en_pinula={a.vota_en_pinula}
                                     es_fiscal={a.es_fiscal}
+                                    rol={a.rol}
+                                    ubicacion={a.ubicacion}
                                   />
                                 ))
                               )}
@@ -1530,10 +1659,21 @@ export default function EstadisticasPage() {
         {vista === 'fiscales' && mostrarTemplarioTab && (
           <>
             <div className="card">
-              <h2 className="font-semibold text-base mb-1" style={{ color: 'var(--texto-principal)' }}>Fiscales</h2>
-              <p className="text-sm mb-4" style={{ color: 'var(--texto-secundario)' }}>
-                Afiliados marcados como Fiscal (Sí), agrupados por Templario
-              </p>
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="font-semibold text-base mb-1" style={{ color: 'var(--texto-principal)' }}>Fiscales</h2>
+                  <p className="text-sm" style={{ color: 'var(--texto-secundario)' }}>
+                    Afiliados marcados como Fiscal (Sí), agrupados por Templario
+                  </p>
+                </div>
+                <button
+                  onClick={handleExportFiscales}
+                  disabled={loadingFiscales || statsFiscales.length === 0}
+                  className="text-xs px-3 py-2 rounded-lg font-semibold text-white disabled:opacity-50 flex-shrink-0"
+                  style={{ background: '#166534' }}>
+                  Exportar Excel
+                </button>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl p-3 text-center" style={{ background: '#e0f7fa' }}>
                   <p className="text-2xl font-bold" style={{ color: '#004466' }}>{totalFiscales}</p>
@@ -1597,6 +1737,8 @@ export default function EstadisticasPage() {
                                 telefono={a.telefono}
                                 sector={a.sector}
                                 vota_en_pinula={a.vota_en_pinula}
+                                rol={a.rol}
+                                ubicacion={a.ubicacion}
                               />
                             ))
                           )}
