@@ -94,6 +94,18 @@ type ResumenTemplario = {
   afiliados: number
 }
 
+// ── Fiscales (Templario → afiliados con es_fiscal = true) ─────
+type FiscalAfiliado = {
+  id: number
+  nombre: string
+}
+
+type EstadisticaFiscalTemplario = {
+  afiliado_por: string
+  total: number
+  afiliados: FiscalAfiliado[]
+}
+
 const META_COORDINADORES_POR_TEMPLARIO = 20
 const META_AFILIADOS_POR_COORDINADOR = 35
 const META_AFILIADOS_TOTAL_TEMPLARIO = META_COORDINADORES_POR_TEMPLARIO * META_AFILIADOS_POR_COORDINADOR
@@ -102,7 +114,7 @@ const ROLES_SIN_ACCESO = ['lider', 'colaborador', 'templario']
 const ROLES_LEGALES = ['admin', 'pentagono']
 
 // ──────────────────────────────────────────────────────────────
-// Normalización de nombres (compartida entre Por sector, Por templario y Estructura)
+// Normalización de nombres (compartida entre Por sector, Por templario, Estructura y Fiscales)
 // ──────────────────────────────────────────────────────────────
 // Resuelve variantes por tildes, mayúsculas o espacios extra
 // (ej. "René Galicia" vs "Rene Galicia", "Sebastián España" vs
@@ -190,7 +202,7 @@ function AnilloProgreso({
 export default function EstadisticasPage() {
   const router = useRouter()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
-  const [vista, setVista] = useState<'sector' | 'templario' | 'estructura'>('sector')
+  const [vista, setVista] = useState<'sector' | 'templario' | 'estructura' | 'fiscales'>('sector')
 
   // ── Por sector ──────────────────────────────────────────────
   const [estadisticas, setEstadisticas] = useState<EstadisticaSector[]>([])
@@ -222,6 +234,12 @@ export default function EstadisticasPage() {
   const [templarioSeleccionado, setTemplarioSeleccionado] = useState<string>('')
   const [afiliadosEstructura, setAfiliadosEstructura] = useState<RawAfiliadoEstructura[]>([])
   const [expandidoCoordinador, setExpandidoCoordinador] = useState<number | null>(null)
+
+  // ── Fiscales ────────────────────────────────────────────────
+  const [statsFiscales, setStatsFiscales] = useState<EstadisticaFiscalTemplario[]>([])
+  const [loadingFiscales, setLoadingFiscales] = useState(false)
+  const [expandidoFiscal, setExpandidoFiscal] = useState<string | null>(null)
+  const [fiscalesDataCargada, setFiscalesDataCargada] = useState(false)
 
   useEffect(() => {
     const init = async () => {
@@ -267,6 +285,15 @@ export default function EstadisticasPage() {
     }
   }
 
+  const seleccionarVistaFiscales = () => {
+    setVista('fiscales')
+    if (!fiscalesDataCargada) {
+      setFiscalesDataCargada(true)
+      setLoadingFiscales(true)
+      cargarStatsFiscales()
+    }
+  }
+
   const cargarEstructura = async () => {
     try {
       const { data: templariosData, error: templariosError } = await supabase
@@ -301,6 +328,81 @@ export default function EstadisticasPage() {
       console.error('Error cargando estructura:', e)
     } finally {
       setLoadingEstructura(false)
+    }
+  }
+
+  const cargarStatsFiscales = async () => {
+    try {
+      const { data: templariosData, error: templariosError } = await supabase
+        .from('afiliado_por')
+        .select('id, nombre')
+        .order('nombre')
+
+      if (templariosError) throw templariosError
+
+      let allRows: any[] = []
+      let from = 0
+      const pageSize = 1000
+      let hasMore = true
+
+      while (hasMore) {
+        const { data: page, error } = await supabase
+          .from('afiliados')
+          .select('id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, afiliado_por')
+          .eq('es_fiscal', true)
+          .range(from, from + pageSize - 1)
+
+        if (error) throw error
+        if (!page || page.length === 0) { hasMore = false; break }
+
+        allRows = allRows.concat(page)
+        if (page.length < pageSize) hasMore = false
+        from += pageSize
+      }
+
+      // Arrancamos con TODOS los templarios del catalogo (aunque tengan 0
+      // fiscales), igual que en el resumen de Estructura.
+      const porTemplario: Record<string, { nombre: string; afiliados: FiscalAfiliado[] }> = {}
+      ;(templariosData || []).forEach((t: any) => {
+        porTemplario[claveFinal(t.nombre)] = { nombre: t.nombre, afiliados: [] }
+      })
+
+      const variantesPorClave: Record<string, Record<string, number>> = {}
+
+      allRows.forEach((a: any) => {
+        const nombreOriginal = a.afiliado_por || 'Sin registrar'
+        const key = claveFinal(nombreOriginal)
+        if (!porTemplario[key]) {
+          porTemplario[key] = { nombre: nombreOriginal, afiliados: [] }
+        }
+        if (!variantesPorClave[key]) variantesPorClave[key] = {}
+        variantesPorClave[key][nombreOriginal] = (variantesPorClave[key][nombreOriginal] || 0) + 1
+
+        const nombreAfiliado = [a.primer_nombre, a.segundo_nombre, a.primer_apellido, a.segundo_apellido]
+          .filter(Boolean)
+          .join(' ')
+        porTemplario[key].afiliados.push({ id: a.id, nombre: nombreAfiliado })
+      })
+
+      for (const key of Object.keys(variantesPorClave)) {
+        const variantes = variantesPorClave[key]
+        const nombreMasFrecuente = Object.entries(variantes).sort((a, b) => b[1] - a[1])[0][0]
+        porTemplario[key].nombre = nombreMasFrecuente
+      }
+
+      const resultado = Object.values(porTemplario)
+        .map((t) => ({
+          afiliado_por: t.nombre,
+          total: t.afiliados.length,
+          afiliados: t.afiliados.sort((a, b) => a.nombre.localeCompare(b.nombre)),
+        }))
+        .sort((a, b) => b.total - a.total)
+
+      setStatsFiscales(resultado)
+    } catch (e) {
+      console.error('Error cargando fiscales:', e)
+    } finally {
+      setLoadingFiscales(false)
     }
   }
 
@@ -697,6 +799,8 @@ export default function EstadisticasPage() {
   }
 
   const totalGeneralTemplario = statsTemplarios.reduce((s, e) => s + e.total, 0)
+  const totalFiscales = statsFiscales.reduce((s, e) => s + e.total, 0)
+  const templariosConFiscales = statsFiscales.filter((e) => e.total > 0).length
 
   const ROLES_TEMPLARIO = [
     { key: 'coordinador',  label: 'Coordinadores',  color: '#004466', bg: '#e0f7fa' },
@@ -736,6 +840,14 @@ export default function EstadisticasPage() {
                 ? { background: '#004466', color: 'white', borderColor: '#004466' }
                 : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
               Estructura
+            </button>
+            <button
+              onClick={seleccionarVistaFiscales}
+              className="text-sm px-4 py-2 rounded-lg border font-medium transition-all"
+              style={vista === 'fiscales'
+                ? { background: '#004466', color: 'white', borderColor: '#004466' }
+                : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
+              Fiscales
             </button>
           </div>
         )}
@@ -1344,6 +1456,85 @@ export default function EstadisticasPage() {
                     label="Afiliados asignados (meta ideal)"
                   />
                 </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {vista === 'fiscales' && mostrarTemplarioTab && (
+          <>
+            <div className="card">
+              <h2 className="font-semibold text-base mb-1" style={{ color: 'var(--texto-principal)' }}>Fiscales</h2>
+              <p className="text-sm mb-4" style={{ color: 'var(--texto-secundario)' }}>
+                Afiliados marcados como Fiscal (Sí), agrupados por Templario
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl p-3 text-center" style={{ background: '#e0f7fa' }}>
+                  <p className="text-2xl font-bold" style={{ color: '#004466' }}>{totalFiscales}</p>
+                  <p className="text-xs mt-0.5" style={{ color: '#004466' }}>Total fiscales</p>
+                </div>
+                <div className="rounded-xl p-3 text-center" style={{ background: '#fef3c7' }}>
+                  <p className="text-2xl font-bold" style={{ color: '#b45309' }}>{templariosConFiscales}</p>
+                  <p className="text-xs mt-0.5" style={{ color: '#b45309' }}>Templarios con fiscales</p>
+                </div>
+              </div>
+            </div>
+
+            {loadingFiscales ? (
+              <div className="card text-center py-10">
+                <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto" style={{ borderColor: '#004466' }}></div>
+              </div>
+            ) : statsFiscales.length === 0 ? (
+              <div className="card text-center py-10">
+                <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>No hay templarios registrados</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {statsFiscales.map((t) => {
+                  const abierto = expandidoFiscal === t.afiliado_por
+                  return (
+                    <div key={t.afiliado_por} className="card hover:shadow-md transition-shadow">
+                      <button className="w-full text-left" onClick={() => setExpandidoFiscal(abierto ? null : t.afiliado_por)}>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 text-sm" style={{ background: '#004466' }}>
+                              {t.afiliado_por.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-sm leading-snug" style={{ color: 'var(--texto-principal)' }}>{t.afiliado_por}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className="text-right">
+                              <p className="font-bold text-lg leading-none" style={{ color: '#004466' }}>{t.total}</p>
+                              <p className="text-xs" style={{ color: 'var(--texto-secundario)' }}>fiscal{t.total !== 1 ? 'es' : ''}</p>
+                            </div>
+                            <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform ${abierto ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'var(--texto-secundario)' }}>
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </div>
+                      </button>
+
+                      {abierto && (
+                        <div className="mt-4 pt-4 border-t space-y-1.5" style={{ borderColor: 'var(--color-borde)' }}>
+                          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--texto-secundario)' }}>
+                            Afiliados fiscales
+                          </p>
+                          {t.afiliados.length === 0 ? (
+                            <p className="text-sm italic" style={{ color: 'var(--texto-secundario)' }}>Sin fiscales registrados todavia.</p>
+                          ) : (
+                            t.afiliados.map((a) => (
+                              <div key={a.id} className="flex items-center px-3 py-2 rounded-lg" style={{ background: '#f8fafc' }}>
+                                <span className="text-xs font-medium" style={{ color: 'var(--texto-principal)' }}>{a.nombre}</span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </>
