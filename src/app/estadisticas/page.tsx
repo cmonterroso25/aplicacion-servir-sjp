@@ -75,11 +75,19 @@ type RawAfiliadoEstructura = {
   rol_afiliado: string | null
   afiliado_por: string | null
   coordinador_id: number | null
+  telefono: string | null
+  vota_en_pinula: boolean | null
+  es_fiscal: boolean | null
+  sectores: { nombre: string } | null
 }
 
 type EstructuraAfiliado = {
   id: number
   nombre: string
+  telefono: string | null
+  sector: string
+  vota_en_pinula: boolean | null
+  es_fiscal: boolean | null
 }
 
 type EstructuraCoordinador = {
@@ -98,6 +106,9 @@ type ResumenTemplario = {
 type FiscalAfiliado = {
   id: number
   nombre: string
+  telefono: string | null
+  sector: string
+  vota_en_pinula: boolean | null
 }
 
 type EstadisticaFiscalTemplario = {
@@ -195,6 +206,43 @@ function AnilloProgreso({
         </text>
       </svg>
       <p className="text-xs font-medium mt-2 text-center" style={{ color: 'var(--texto-secundario)' }}>{label}</p>
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────────────────────
+// Tarjeta de detalle de un afiliado (reutilizada en Estructura y Fiscales)
+// ──────────────────────────────────────────────────────────────
+function AfiliadoDetalleCard({
+  nombre,
+  telefono,
+  sector,
+  vota_en_pinula,
+  es_fiscal,
+}: {
+  nombre: string
+  telefono: string | null
+  sector: string
+  vota_en_pinula: boolean | null
+  es_fiscal?: boolean | null
+}) {
+  return (
+    <div className="px-3 py-2 rounded-lg space-y-1" style={{ background: '#f8fafc' }}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold" style={{ color: 'var(--texto-principal)' }}>{nombre}</span>
+        {es_fiscal && (
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#e0f7fa', color: '#004466' }}>
+            Fiscal
+          </span>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]" style={{ color: 'var(--texto-secundario)' }}>
+        <span>{telefono || 'Sin telefono'}</span>
+        <span>{sector}</span>
+        <span style={{ color: vota_en_pinula ? '#166534' : '#9b1c3a', fontWeight: 500 }}>
+          {vota_en_pinula ? 'Vota en Pinula' : 'No vota en Pinula'}
+        </span>
+      </div>
     </div>
   )
 }
@@ -312,13 +360,13 @@ export default function EstadisticasPage() {
       while (hasMore) {
         const { data: page, error } = await supabase
           .from('afiliados')
-          .select('id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, rol_afiliado, afiliado_por, coordinador_id')
+          .select('id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, rol_afiliado, afiliado_por, coordinador_id, telefono, vota_en_pinula, es_fiscal, sectores(nombre)')
           .range(from, from + pageSize - 1)
 
         if (error) throw error
         if (!page || page.length === 0) { hasMore = false; break }
 
-        allRows = allRows.concat(page as RawAfiliadoEstructura[])
+        allRows = allRows.concat(page as unknown as RawAfiliadoEstructura[])
         if (page.length < pageSize) hasMore = false
         from += pageSize
       }
@@ -348,7 +396,7 @@ export default function EstadisticasPage() {
       while (hasMore) {
         const { data: page, error } = await supabase
           .from('afiliados')
-          .select('id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, afiliado_por')
+          .select('id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, afiliado_por, telefono, vota_en_pinula, sectores(nombre)')
           .eq('es_fiscal', true)
           .range(from, from + pageSize - 1)
 
@@ -381,7 +429,13 @@ export default function EstadisticasPage() {
         const nombreAfiliado = [a.primer_nombre, a.segundo_nombre, a.primer_apellido, a.segundo_apellido]
           .filter(Boolean)
           .join(' ')
-        porTemplario[key].afiliados.push({ id: a.id, nombre: nombreAfiliado })
+        porTemplario[key].afiliados.push({
+          id: a.id,
+          nombre: nombreAfiliado,
+          telefono: a.telefono ?? null,
+          sector: a.sectores?.nombre || 'Sin sector',
+          vota_en_pinula: a.vota_en_pinula ?? null,
+        })
       })
 
       for (const key of Object.keys(variantesPorClave)) {
@@ -421,7 +475,14 @@ export default function EstadisticasPage() {
 
     afiliadosEstructura.forEach((a) => {
       if (a.coordinador_id != null && mapa[a.coordinador_id]) {
-        mapa[a.coordinador_id].afiliados.push({ id: a.id, nombre: nombreCompletoAfiliado(a) })
+        mapa[a.coordinador_id].afiliados.push({
+          id: a.id,
+          nombre: nombreCompletoAfiliado(a),
+          telefono: a.telefono,
+          sector: a.sectores?.nombre || 'Sin sector',
+          vota_en_pinula: a.vota_en_pinula,
+          es_fiscal: a.es_fiscal,
+        })
       }
     })
 
@@ -1364,9 +1425,14 @@ export default function EstadisticasPage() {
                                 <p className="text-sm italic" style={{ color: 'var(--texto-secundario)' }}>Sin afiliados asignados todavia.</p>
                               ) : (
                                 c.afiliados.map((a) => (
-                                  <div key={a.id} className="flex items-center px-3 py-2 rounded-lg" style={{ background: '#f8fafc' }}>
-                                    <span className="text-xs font-medium" style={{ color: 'var(--texto-principal)' }}>{a.nombre}</span>
-                                  </div>
+                                  <AfiliadoDetalleCard
+                                    key={a.id}
+                                    nombre={a.nombre}
+                                    telefono={a.telefono}
+                                    sector={a.sector}
+                                    vota_en_pinula={a.vota_en_pinula}
+                                    es_fiscal={a.es_fiscal}
+                                  />
                                 ))
                               )}
                             </div>
@@ -1525,9 +1591,13 @@ export default function EstadisticasPage() {
                             <p className="text-sm italic" style={{ color: 'var(--texto-secundario)' }}>Sin fiscales registrados todavia.</p>
                           ) : (
                             t.afiliados.map((a) => (
-                              <div key={a.id} className="flex items-center px-3 py-2 rounded-lg" style={{ background: '#f8fafc' }}>
-                                <span className="text-xs font-medium" style={{ color: 'var(--texto-principal)' }}>{a.nombre}</span>
-                              </div>
+                              <AfiliadoDetalleCard
+                                key={a.id}
+                                nombre={a.nombre}
+                                telefono={a.telefono}
+                                sector={a.sector}
+                                vota_en_pinula={a.vota_en_pinula}
+                              />
                             ))
                           )}
                         </div>
