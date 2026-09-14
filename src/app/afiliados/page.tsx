@@ -135,6 +135,7 @@ export default function AfiliadosPage() {
   const [afiliadoPorList, setAfiliadoPorList] = useState<{ id: number; nombre: string }[]>([])
   const [coordinadoresList, setCoordinadoresList] = useState<CoordinadorOpcion[]>([])
   const [loading, setLoading] = useState(true)
+  const [initialLoad, setInitialLoad] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -179,6 +180,7 @@ export default function AfiliadosPage() {
 
       const identificadorPropio = p?.nombre_completo || p?.email || ''
       await cargarAfiliados(p?.rol || 'encargado', session.user.id, identificadorPropio, '', FILTROS_VACIOS, 1)
+      setInitialLoad(false)
     }
     init()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -607,7 +609,7 @@ export default function AfiliadosPage() {
 
         <div className="flex items-center justify-between flex-wrap gap-2">
           <p className="text-sm font-medium" style={{ color: 'var(--texto-secundario)' }}>
-            {loading ? 'Cargando...' : `${afiliadosOrdenados.length} de ${total} afiliado${total !== 1 ? 's' : ''} · Página ${page} de ${totalPages}`}
+            {loading ? 'Actualizando...' : `${afiliadosOrdenados.length} de ${total} afiliado${total !== 1 ? 's' : ''} · Página ${page} de ${totalPages}`}
           </p>
           <div className="flex items-center gap-2">
             <button onClick={limpiarFiltros} className="text-xs px-3 py-1.5 rounded-lg border font-medium" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
@@ -624,17 +626,19 @@ export default function AfiliadosPage() {
           </div>
         </div>
 
-        {loading ? (
+        {initialLoad ? (
           <div className="card text-center py-10">
             <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto" style={{ borderColor: '#004466' }}></div>
           </div>
-        ) : total === 0 ? (
-          <div className="card text-center py-10">
-            <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>No se encontraron afiliados</p>
-            <p className="text-sm mt-1" style={{ color: 'var(--texto-secundario)' }}>Verifica los filtros aplicados o haz clic en "+ Nuevo" para agregar el primero.</p>
-          </div>
         ) : (
-          <div className="card overflow-x-auto p-0">
+          <div className="card overflow-x-auto p-0 relative">
+            {loading && (
+              <div
+                className="absolute inset-0 flex items-center justify-center z-20"
+                style={{ background: 'rgba(255,255,255,0.6)' }}>
+                <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#004466' }}></div>
+              </div>
+            )}
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ background: '#f0f6f9', borderBottom: '1px solid var(--color-borde)' }}>
@@ -729,7 +733,7 @@ export default function AfiliadosPage() {
                 {afiliadosOrdenados.length === 0 ? (
                   <tr>
                     <td colSpan={totalColumnas} className="text-center py-8 text-sm" style={{ color: 'var(--texto-secundario)' }}>
-                      Ningun afiliado coincide con los filtros aplicados.
+                      {loading ? 'Buscando...' : 'Ningun afiliado coincide con los filtros aplicados.'}
                     </td>
                   </tr>
                 ) : (
