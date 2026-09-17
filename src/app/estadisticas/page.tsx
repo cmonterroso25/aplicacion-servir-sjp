@@ -1283,6 +1283,39 @@ export default function EstadisticasPage() {
                 <p className="text-sm mt-1" style={{ color: 'var(--texto-secundario)' }}>No hay afiliados registrados.</p>
               </div>
             ) : (
+              <>
+              {/* Grafica resumen: afiliados por templario */}
+              <div className="card space-y-4">
+                <h2 className="font-semibold text-sm" style={{ color: 'var(--texto-principal)' }}>
+                  Afiliados por templario
+                </h2>
+                <div className="space-y-2.5">
+                  {statsTemplarios.map((e) => {
+                    const max = statsTemplarios[0].total || 1
+                    const ancho = Math.max((e.total / max) * 100, 6)
+                    return (
+                      <div key={e.afiliado_por} className="flex items-center gap-3">
+                        <p
+                          className="text-xs font-medium w-28 sm:w-40 flex-shrink-0 text-right leading-tight"
+                          style={{ color: 'var(--texto-secundario)' }}
+                          title={e.afiliado_por}
+                        >
+                          {e.afiliado_por}
+                        </p>
+                        <div className="flex-1 h-5 rounded-md overflow-hidden">
+                          <div
+                            className="h-full rounded-md flex items-center justify-end px-2 transition-all"
+                            style={{ width: `${ancho}%`, background: '#004466', minWidth: '1.75rem' }}
+                          >
+                            <span className="text-xs font-semibold text-white">{e.total}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
               <div className="space-y-3">
                 {statsTemplarios.map((enc) => {
                   const abierto = expandidoTemplario === enc.afiliado_por
@@ -1368,6 +1401,7 @@ export default function EstadisticasPage() {
                   )
                 })}
               </div>
+              </>
             )}
 
             {/* ────────────────────────────────────────────────────────── */}
