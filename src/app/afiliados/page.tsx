@@ -19,7 +19,7 @@ const GENEROS = ['Masculino', 'Femenino']
 
 // Roles de perfil (login) que solo ven / filtran por sus propios afiliados
 // (comparando por encargado_id = su propio user id).
-// OJO: esto es distinto del rol_afiliado "Coordinador" del afiliado en sí.
+// OJO: esto es distinto del rol_afiliado "Coordinador" del afiliado en si.
 const ROLES_SOLO_PROPIOS = ['colaborador', 'encargado', 'templario']
 
 // Roles de perfil (login) que solo ven los afiliados donde "afiliado_por"
@@ -35,8 +35,18 @@ const ROLES_ASIGNAN_COORDINADOR = ['admin', 'pentagono']
 // Roles de perfil (login) que pueden eliminar afiliados
 const ROLES_ELIMINAN = ['admin']
 
+// NOTA IMPORTANTE: ya NO se pide el embed de "coordinador" via PostgREST
+// (coordinador:afiliados!fk(...)) porque el proyecto de Supabase no logra
+// resolver relaciones auto-referenciadas (afiliados -> afiliados) ni
+// siquiera despues de: NOTIFY pgrst reload schema, COMMENT ON CONSTRAINT
+// (dispara reload automatico), y un restart completo del proyecto. El FK
+// SI existe y esta bien nombrado (afiliados_coordinador_id_fkey), pero
+// PostgREST en este proyecto no lo detecta para self-joins. En vez de
+// seguir peleando contra eso, el coordinador se resuelve del lado del
+// cliente cruzando coordinador_id contra coordinadoresList (ver
+// cargarAfiliados y guardarEdicion).
 const SELECT_AFILIADOS =
-  '*, sectores(nombre, encargado_nombre), perfiles(nombre_completo, email), coordinador:afiliados!coordinador_id(id, primer_apellido, segundo_apellido, primer_nombre, segundo_nombre)'
+  '*, sectores(nombre, encargado_nombre), perfiles(nombre_completo, email)'
 
 const PAGE_SIZE = 100
 
@@ -55,6 +65,7 @@ type FiltrosState = {
   ubicacion: string
   encargado: string
   afiliado_por: string
+  coordinador: string
   vota: string
   fiscal: string
   fecha_registro: string
@@ -63,7 +74,7 @@ type FiltrosState = {
 const FILTROS_VACIOS: FiltrosState = {
   nombre: '', dpi: '', telefono: '', fecha_nacimiento: '', edad: '',
   genero: '', rol: '', sector: '', ubicacion: '',
-  encargado: '', afiliado_por: '', vota: '', fiscal: '', fecha_registro: '',
+  encargado: '', afiliado_por: '', coordinador: '', vota: '', fiscal: '', fecha_registro: '',
 }
 
 type Draft = {
@@ -152,13 +163,36 @@ export default function AfiliadosPage() {
   const [errorEdicion, setErrorEdicion] = useState('')
   const [eliminandoId, setEliminandoId] = useState<number | null>(null)
 
+  // Ref con el id de la fila que REALMENTE esta en edicion en este instante.
+  // guardarEdicion es async (espera a Supabase); si mientras esa espera esta
+  // en curso el usuario ya hizo click en "Editar" de otra fila, editandoId
+  // (estado) cambia de inmediato pero la promesa en vuelo todavia no
+  // resuelve. Usamos esta ref para que, al terminar, el guardado de la fila
+  // original no pise/cierre la edicion de la fila nueva que el usuario ya
+  // esta llenando.
+  const editandoIdRef = useRef<number | null>(null)
+  useEffect(() => {
+    editandoIdRef.current = editandoId
+  }, [editandoId])
+
+  // Ref con la lista de coordinadores SIEMPRE actualizada de forma sincrona
+  // (se escribe en el mismo momento en que llega la respuesta de Supabase,
+  // sin depender de que React ya haya re-renderizado). Se usa para resolver
+  // el campo "coordinador" del lado del cliente, ya que PostgREST en este
+  // proyecto no logra resolver el self-join afiliados -> afiliados (ver
+  // comentario en SELECT_AFILIADOS).
+  const coordinadoresRef = useRef<CoordinadorOpcion[]>([])
+
   const cargarCoordinadores = useCallback(async () => {
     const { data } = await supabase
       .from('afiliados')
       .select('id, primer_apellido, segundo_apellido, primer_nombre, segundo_nombre, afiliado_por')
       .eq('rol_afiliado', 'Coordinador')
       .order('primer_apellido')
-    setCoordinadoresList((data as any) || [])
+    const lista = (data as any) || []
+    coordinadoresRef.current = lista
+    setCoordinadoresList(lista)
+    return lista as CoordinadorOpcion[]
   }, [])
 
   useEffect(() => {
@@ -252,6 +286,13 @@ export default function AfiliadosPage() {
       if (filtrosActuales.afiliado_por.trim()) {
         q = q.ilike('afiliado_por', `%${filtrosActuales.afiliado_por.trim()}%`)
       }
+      if (filtrosActuales.coordinador) {
+        if (filtrosActuales.coordinador === 'sin') {
+          q = q.is('coordinador_id', null)
+        } else {
+          q = q.eq('coordinador_id', parseInt(filtrosActuales.coordinador))
+        }
+      }
       if (filtrosActuales.vota) {
         if (filtrosActuales.vota === 'si') {
           q = q.eq('vota_en_pinula', true)
@@ -291,7 +332,16 @@ export default function AfiliadosPage() {
 
       const { data, count, error } = await q
       if (error) console.error('Error cargando afiliados:', error.message)
-      setAfiliados(data || [])
+
+      // Resolvemos "coordinador" del lado del cliente cruzando coordinador_id
+      // contra coordinadoresRef.current (ver comentario junto a SELECT_AFILIADOS).
+      const coordMap = new Map(coordinadoresRef.current.map((c) => [c.id, c]))
+      const enriquecidos = (data || []).map((a: any) => ({
+        ...a,
+        coordinador: a.coordinador_id ? (coordMap.get(a.coordinador_id) || null) : null,
+      }))
+
+      setAfiliados(enriquecidos)
       setTotal(count || 0)
     } finally {
       setLoading(false)
@@ -454,15 +504,24 @@ export default function AfiliadosPage() {
       setErrorEdicion('Nombre y apellido son obligatorios.')
       return
     }
+
+    // Capturamos el id y el draft de ESTA fila en el momento del click.
+    // Como esta funcion es async (espera a Supabase), el usuario puede
+    // mientras tanto hacer click en "Editar" de otra fila; en ese caso
+    // editandoId/draft del estado global ya habran cambiado para cuando
+    // esta promesa resuelva, y no debemos usarlos ni pisarlos.
+    const idAGuardar = editandoId
+    const draftAGuardar = draft
+
     setGuardandoEdicion(true)
     setErrorEdicion('')
 
-    if (draft.dpi.trim()) {
+    if (draftAGuardar.dpi.trim()) {
       const { data: existente } = await supabase
         .from('afiliados')
         .select('id')
-        .eq('dpi', draft.dpi.trim())
-        .neq('id', editandoId)
+        .eq('dpi', draftAGuardar.dpi.trim())
+        .neq('id', idAGuardar)
         .maybeSingle()
       if (existente) {
         setErrorEdicion('Esta persona ya se encuentra afiliada')
@@ -474,24 +533,24 @@ export default function AfiliadosPage() {
     const { data: actualizado, error: err } = await supabase
       .from('afiliados')
       .update({
-        primer_apellido: draft.primer_apellido.toUpperCase(),
-        segundo_apellido: draft.segundo_apellido.toUpperCase() || null,
-        primer_nombre: draft.primer_nombre.toUpperCase(),
-        segundo_nombre: draft.segundo_nombre.toUpperCase() || null,
-        dpi: draft.dpi || null,
-        telefono: draft.telefono || null,
-        fecha_nacimiento: draft.fecha_nacimiento || null,
-        genero: draft.genero || null,
-        rol_afiliado: draft.rol_afiliado,
-        sector_id: draft.sector_id ? parseInt(draft.sector_id) : null,
-        tipo_ubicacion: draft.tipo_ubicacion || null,
-        nombre_ubicacion: draft.nombre_ubicacion || null,
-        afiliado_por: draft.afiliado_por || null,
-        coordinador_id: draft.coordinador_id ? parseInt(draft.coordinador_id) : null,
-        vota_en_pinula: draft.vota_en_pinula,
-        es_fiscal: draft.es_fiscal,
+        primer_apellido: draftAGuardar.primer_apellido.toUpperCase(),
+        segundo_apellido: draftAGuardar.segundo_apellido.toUpperCase() || null,
+        primer_nombre: draftAGuardar.primer_nombre.toUpperCase(),
+        segundo_nombre: draftAGuardar.segundo_nombre.toUpperCase() || null,
+        dpi: draftAGuardar.dpi || null,
+        telefono: draftAGuardar.telefono || null,
+        fecha_nacimiento: draftAGuardar.fecha_nacimiento || null,
+        genero: draftAGuardar.genero || null,
+        rol_afiliado: draftAGuardar.rol_afiliado,
+        sector_id: draftAGuardar.sector_id ? parseInt(draftAGuardar.sector_id) : null,
+        tipo_ubicacion: draftAGuardar.tipo_ubicacion || null,
+        nombre_ubicacion: draftAGuardar.nombre_ubicacion || null,
+        afiliado_por: draftAGuardar.afiliado_por || null,
+        coordinador_id: draftAGuardar.coordinador_id ? parseInt(draftAGuardar.coordinador_id) : null,
+        vota_en_pinula: draftAGuardar.vota_en_pinula,
+        es_fiscal: draftAGuardar.es_fiscal,
       })
-      .eq('id', editandoId)
+      .eq('id', idAGuardar)
       .select(SELECT_AFILIADOS)
       .single()
 
@@ -505,11 +564,26 @@ export default function AfiliadosPage() {
       return
     }
 
-    setAfiliados((prev) => prev.map((a) => (a.id === editandoId ? (actualizado as any) : a)))
+    // Enriquecemos el registro actualizado con su coordinador (client-side,
+    // ver comentario junto a SELECT_AFILIADOS) antes de meterlo al estado.
+    const coordinadorIdNum = draftAGuardar.coordinador_id ? parseInt(draftAGuardar.coordinador_id) : null
+    const coordMap = new Map(coordinadoresRef.current.map((c) => [c.id, c]))
+    const actualizadoConCoordinador = {
+      ...(actualizado as any),
+      coordinador: coordinadorIdNum ? (coordMap.get(coordinadorIdNum) || null) : null,
+    }
+
+    setAfiliados((prev) => prev.map((a) => (a.id === idAGuardar ? actualizadoConCoordinador : a)))
     await cargarCoordinadores()
     setGuardandoEdicion(false)
-    setEditandoId(null)
-    setDraft(null)
+
+    // Solo cerramos el modo edicion si seguimos apuntando a la MISMA fila
+    // que se acaba de guardar. Si mientras tanto el usuario ya empezo a
+    // editar otra fila, dejamos su edicion en curso intacta.
+    if (editandoIdRef.current === idAGuardar) {
+      setEditandoId(null)
+      setDraft(null)
+    }
   }
 
   const eliminarAfiliado = async (a: Afiliado) => {
@@ -548,8 +622,8 @@ export default function AfiliadosPage() {
     ? (OPCIONES_UBICACION[draft.tipo_ubicacion as TipoUbicacion] || [])
     : []
 
-  // Coordinadores candidatos para el afiliado en edición: mismo "afiliado por"
-  // y sin poder elegirse a sí mismo.
+  // Coordinadores candidatos para el afiliado en edicion: mismo "afiliado por"
+  // y sin poder elegirse a si mismo.
   const opcionesCoordinadorDraft = useMemo(() => {
     if (!draft) return []
     return coordinadoresList.filter(
@@ -708,7 +782,15 @@ export default function AfiliadosPage() {
                   <th className="px-3 py-1.5">
                     <input type="text" value={filtros.afiliado_por} onChange={(e) => handleFiltroChange('afiliado_por', e.target.value)} placeholder="Filtrar..." className={inputFiltro} style={inputFiltroStyle} />
                   </th>
-                  <th className="px-3 py-1.5"></th>
+                  <th className="px-3 py-1.5">
+                    <select value={filtros.coordinador} onChange={(e) => handleFiltroChange('coordinador', e.target.value)} className={inputFiltro} style={inputFiltroStyle}>
+                      <option value="">Todos</option>
+                      <option value="sin">Sin coordinador</option>
+                      {coordinadoresList.map((c) => (
+                        <option key={c.id} value={c.id}>{formatNombreCoordinador(c)}</option>
+                      ))}
+                    </select>
+                  </th>
                   <th className="px-3 py-1.5">
                     <select value={filtros.vota} onChange={(e) => handleFiltroChange('vota', e.target.value)} className={inputFiltro} style={inputFiltroStyle}>
                       <option value="">Todos</option>
