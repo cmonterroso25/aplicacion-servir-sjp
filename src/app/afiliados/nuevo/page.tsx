@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase, type Sector, type Perfil } from '@/lib/supabase'
 import { TIPOS_UBICACION, OPCIONES_UBICACION, type TipoUbicacion } from '@/lib/ubicaciones'
 
 const ROLES_AFILIADO = ['Simpatizante', 'Organizador', 'Guerrero', 'Coordinador', 'Templario']
+const GENEROS = ['Masculino', 'Femenino']
 
 const MESES = [
   { valor: '01', nombre: 'Enero' },
@@ -32,6 +33,20 @@ function diasEnMes(mes: string, anio: string): number {
 const ANIO_ACTUAL = new Date().getFullYear()
 const ANIOS = Array.from({ length: 100 }, (_, i) => String(ANIO_ACTUAL - i))
 
+type CoordinadorOpcion = {
+  id: number
+  primer_apellido: string
+  segundo_apellido: string | null
+  primer_nombre: string
+  segundo_nombre: string | null
+  afiliado_por: string | null
+}
+
+function formatNombreCoordinador(c: CoordinadorOpcion | null | undefined) {
+  if (!c) return null
+  return [c.primer_apellido, c.segundo_apellido, c.primer_nombre, c.segundo_nombre].filter(Boolean).join(' ')
+}
+
 function NuevoAfiliadoForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -51,6 +66,7 @@ function NuevoAfiliadoForm() {
   const [primerNombre, setPrimerNombre] = useState('')
   const [segundoNombre, setSegundoNombre] = useState('')
   const [telefono, setTelefono] = useState('')
+  const [genero, setGenero] = useState('')
 
   const [diaNac, setDiaNac] = useState('')
   const [mesNac, setMesNac] = useState('')
@@ -63,7 +79,9 @@ function NuevoAfiliadoForm() {
   const [direccion, setDireccion] = useState('')
   const [afiliadoPor, setAfiliadoPor] = useState('')
   const [rolAfiliado, setRolAfiliado] = useState('Simpatizante')
+  const [coordinadorId, setCoordinadorId] = useState('')
   const [encargados, setEncargados] = useState<{sector: string, encargado: string}[]>([])
+  const [coordinadoresList, setCoordinadoresList] = useState<CoordinadorOpcion[]>([])
 
   useEffect(() => {
     if (diaNac && mesNac && anioNac) {
@@ -102,6 +120,12 @@ function NuevoAfiliadoForm() {
       const { data: ap } = await supabase
         .from('afiliado_por').select('*').order('nombre')
       if (ap) setEncargados(ap.map((x: any) => ({ sector: '', encargado: x.nombre })))
+      const { data: coords } = await supabase
+        .from('afiliados')
+        .select('id, primer_apellido, segundo_apellido, primer_nombre, segundo_nombre, afiliado_por')
+        .eq('rol_afiliado', 'Coordinador')
+        .order('primer_apellido')
+      if (coords) setCoordinadoresList(coords as any)
 
       const dpiParam             = searchParams.get('dpi')
       const primerNombreParam    = searchParams.get('primer_nombre')
@@ -156,6 +180,16 @@ function NuevoAfiliadoForm() {
     setVerificandoDpi(false)
   }
 
+  // Coordinadores que puede elegir el usuario actual:
+  // - admin: ve todos los coordinadores registrados.
+  // - resto: solo los coordinadores cuyo "Afiliado por" coincide con el
+  //   valor seleccionado en este formulario (mismo criterio que se usa
+  //   al editar en afiliados/page.tsx).
+  const opcionesCoordinador = useMemo(() => {
+    if (perfil?.rol === 'admin') return coordinadoresList
+    return coordinadoresList.filter((c) => c.afiliado_por === afiliadoPor)
+  }, [coordinadoresList, perfil, afiliadoPor])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!primerApellido || !primerNombre) {
@@ -196,6 +230,7 @@ function NuevoAfiliadoForm() {
       dpi: dpi || null,
       telefono: telefono || null,
       fecha_nacimiento: fechaNacimiento || null,
+      genero: genero || null,
       sector_id: sectorId ? parseInt(sectorId) : null,
       encargado_id: perfil.id,
       tipo_ubicacion: tipoUbicacion || null,
@@ -204,6 +239,7 @@ function NuevoAfiliadoForm() {
       vota_en_pinula: votaPinula === null ? true : votaPinula,
       afiliado_por: afiliadoPor,
       rol_afiliado: rolAfiliado,
+      coordinador_id: coordinadorId ? parseInt(coordinadorId) : null,
     })
 
     if (err) {
@@ -228,6 +264,11 @@ function NuevoAfiliadoForm() {
     Guerrero:     { bg: '#fce4ec', color: '#9b1c3a' },
     Coordinador:  { bg: '#e8f5e9', color: '#166534' },
     Templario:    { bg: '#ede7f6', color: '#4527a0' },
+  }
+
+  const colorGenero: Record<string, { bg: string; color: string }> = {
+    Masculino: { bg: '#e0f2fe', color: '#075985' },
+    Femenino:  { bg: '#fce7f3', color: '#9d174d' },
   }
 
   if (guardado) {
@@ -354,8 +395,30 @@ function NuevoAfiliadoForm() {
               </div>
 
               <div className="col-span-2">
+                <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--texto-secundario)' }}>Género</label>
+                <div className="flex flex-wrap gap-2">
+                  {GENEROS.map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setGenero(g)}
+                      className="px-3 py-1.5 text-sm rounded-lg border font-medium transition-all"
+                      style={genero === g
+                        ? { ...colorGenero[g], borderColor: colorGenero[g].color, fontWeight: 700 }
+                        : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="col-span-2">
                 <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--texto-secundario)' }}>Afiliado por *</label>
-                <select value={afiliadoPor} onChange={(e) => setAfiliadoPor(e.target.value)} className="input-field" required>
+                <select
+                  value={afiliadoPor}
+                  onChange={(e) => { setAfiliadoPor(e.target.value); setCoordinadorId('') }}
+                  className="input-field"
+                  required>
                     <option value="">Selecciona un encargado...</option>
                     {encargados.map((enc) => (
                       <option key={enc.encargado} value={enc.encargado}>{enc.encargado}</option>
@@ -380,6 +443,22 @@ function NuevoAfiliadoForm() {
                   {rol}
                 </button>
               ))}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: 'var(--texto-secundario)' }}>Coordinador</label>
+              <select
+                value={coordinadorId}
+                onChange={(e) => setCoordinadorId(e.target.value)}
+                className="input-field"
+                disabled={!afiliadoPor}>
+                <option value="">Sin coordinador</option>
+                {opcionesCoordinador.map((c) => (
+                  <option key={c.id} value={c.id}>{formatNombreCoordinador(c)}</option>
+                ))}
+              </select>
+              {!afiliadoPor && (
+                <p className="text-xs mt-1" style={{ color: 'var(--texto-secundario)' }}>Selecciona primero quien afilia.</p>
+              )}
             </div>
           </div>
 
