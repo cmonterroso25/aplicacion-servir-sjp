@@ -186,9 +186,8 @@ function NuevoAfiliadoForm() {
   //   valor seleccionado en este formulario (mismo criterio que se usa
   //   al editar en afiliados/page.tsx).
   const opcionesCoordinador = useMemo(() => {
-    if (perfil?.rol === 'admin') return coordinadoresList
     return coordinadoresList.filter((c) => c.afiliado_por === afiliadoPor)
-  }, [coordinadoresList, perfil, afiliadoPor])
+  }, [coordinadoresList, afiliadoPor])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
