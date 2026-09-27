@@ -80,6 +80,7 @@ type RawAfiliadoEstructura = {
   nombre_ubicacion: string | null
   vota_en_pinula: boolean | null
   es_fiscal: boolean | null
+  compromisos: string | null
   sectores: { nombre: string } | null
 }
 
@@ -97,6 +98,7 @@ type EstructuraAfiliado = {
 type EstructuraCoordinador = {
   id: number
   nombre: string
+  compromisos: string | null
   afiliados: EstructuraAfiliado[]
 }
 
@@ -288,6 +290,9 @@ export default function EstadisticasPage() {
   const [templarioSeleccionado, setTemplarioSeleccionado] = useState<string>('')
   const [afiliadosEstructura, setAfiliadosEstructura] = useState<RawAfiliadoEstructura[]>([])
   const [expandidoCoordinador, setExpandidoCoordinador] = useState<number | null>(null)
+  const [compromisosAbierto, setCompromisosAbierto] = useState<number | null>(null)
+  const [compromisoDraft, setCompromisoDraft] = useState('')
+  const [guardandoCompromiso, setGuardandoCompromiso] = useState(false)
 
   // ── Fiscales ────────────────────────────────────────────────
   const [statsFiscales, setStatsFiscales] = useState<EstadisticaFiscalTemplario[]>([])
@@ -366,7 +371,7 @@ export default function EstadisticasPage() {
       while (hasMore) {
         const { data: page, error } = await supabase
           .from('afiliados')
-          .select('id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, rol_afiliado, afiliado_por, coordinador_id, telefono, nombre_ubicacion, vota_en_pinula, es_fiscal, sectores(nombre)')
+          .select('id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, rol_afiliado, afiliado_por, coordinador_id, telefono, nombre_ubicacion, vota_en_pinula, es_fiscal, compromisos, sectores(nombre)')
           .range(from, from + pageSize - 1)
 
         if (error) throw error
@@ -477,7 +482,7 @@ export default function EstadisticasPage() {
       const rolNorm = normalizarClave(a.rol_afiliado || '')
       const apNorm = claveFinal(a.afiliado_por || '')
       if (rolNorm === 'coordinador' && apNorm === key) {
-        mapa[a.id] = { id: a.id, nombre: nombreCompletoAfiliado(a), afiliados: [] }
+        mapa[a.id] = { id: a.id, nombre: nombreCompletoAfiliado(a), compromisos: a.compromisos, afiliados: [] }
       }
     })
 
@@ -500,6 +505,29 @@ export default function EstadisticasPage() {
   }, [templarioSeleccionado, afiliadosEstructura])
 
   const totalAfiliadosEstructura = coordinadoresDelTemplario.reduce((s, c) => s + c.afiliados.length, 0)
+
+  const abrirCompromiso = (c: EstructuraCoordinador) => {
+    setCompromisosAbierto((prev) => (prev === c.id ? null : c.id))
+    setCompromisoDraft(c.compromisos || '')
+  }
+
+  const guardarCompromiso = async (coordinadorId: number) => {
+    setGuardandoCompromiso(true)
+    const valor = compromisoDraft.trim() || null
+    const { error } = await supabase
+      .from('afiliados')
+      .update({ compromisos: valor })
+      .eq('id', coordinadorId)
+    setGuardandoCompromiso(false)
+    if (error) {
+      window.alert('Error al guardar compromisos: ' + error.message)
+      return
+    }
+    setAfiliadosEstructura((prev) =>
+      prev.map((a) => (a.id === coordinadorId ? { ...a, compromisos: valor } : a))
+    )
+    setCompromisosAbierto(null)
+  }
 
   // ── Resumen comparativo de TODOS los templarios ────────────
   const resumenTemplarios = useMemo<ResumenTemplario[]>(() => {
@@ -1576,6 +1604,51 @@ export default function EstadisticasPage() {
                               />
                             </div>
                           </button>
+
+                          <div className="mt-3">
+                            <button
+                              type="button"
+                              onClick={() => abrirCompromiso(c)}
+                              className="text-xs px-3 py-1.5 rounded-lg font-semibold border inline-flex items-center gap-1.5"
+                              style={c.compromisos && c.compromisos.trim()
+                                ? { background: '#fef3c7', color: '#b45309', borderColor: '#fde68a' }
+                                : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
+                              Compromisos
+                              {c.compromisos && c.compromisos.trim() && (
+                                <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#b45309' }}></span>
+                              )}
+                            </button>
+
+                            {compromisosAbierto === c.id && (
+                              <div className="mt-2 p-3 rounded-lg border space-y-2" style={{ borderColor: 'var(--color-borde)', background: '#f8fafc' }}>
+                                <textarea
+                                  value={compromisoDraft}
+                                  onChange={(e) => setCompromisoDraft(e.target.value)}
+                                  rows={4}
+                                  className="w-full text-sm rounded-lg border px-3 py-2"
+                                  style={{ borderColor: 'var(--color-borde)' }}
+                                  placeholder="Escribe los compromisos de este coordinador..."
+                                />
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => guardarCompromiso(c.id)}
+                                    disabled={guardandoCompromiso}
+                                    className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50"
+                                    style={{ background: '#166534' }}>
+                                    {guardandoCompromiso ? 'Guardando...' : 'Guardar'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCompromisosAbierto(null)}
+                                    className="text-xs px-3 py-1.5 rounded-lg border font-medium"
+                                    style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                                    Cerrar
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
 
                           {abierto && (
                             <div className="mt-4 pt-4 border-t space-y-1.5" style={{ borderColor: 'var(--color-borde)' }}>
