@@ -132,6 +132,10 @@ export default function AfiliadosLegalesPage() {
   // Exportar a Excel
   const [exportando, setExportando] = useState(false)
 
+  // Comparar contra la tabla afiliados
+  const [comparando, setComparando] = useState(false)
+  const [mensajeComparacion, setMensajeComparacion] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
+
   useEffect(() => {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -230,6 +234,31 @@ export default function AfiliadosLegalesPage() {
 
   const formatNombreAfiliado = (a: MatchAfiliado) =>
     [a.primer_apellido, a.segundo_apellido, a.primer_nombre, a.segundo_nombre].filter(Boolean).join(' ')
+
+  // --- Comparar contra la tabla afiliados ----------------------------------
+
+  const compararConAfiliados = async () => {
+    const ok = window.confirm('Se compararán por DPI todos los afiliados legales pendientes contra la tabla de afiliados. Los que coincidan pasarán a Vinculado. ¿Continuar?')
+    if (!ok) return
+    setComparando(true)
+    setMensajeComparacion(null)
+    const { data, error } = await supabase.rpc('comparar_afiliados_legales')
+    setComparando(false)
+    if (error) {
+      setMensajeComparacion({ tipo: 'error', texto: 'Error al comparar: ' + error.message })
+      return
+    }
+    const fila: any = Array.isArray(data) ? data[0] : data
+    const vinculados = fila?.vinculados_nuevos ?? 0
+    setMensajeComparacion({
+      tipo: 'ok',
+      texto: vinculados === 0
+        ? 'Comparación completada: no se encontraron nuevas coincidencias por DPI.'
+        : `Comparación completada: se vincularon ${vinculados} afiliado${vinculados !== 1 ? 's' : ''} legal${vinculados !== 1 ? 'es' : ''}.`,
+    })
+    cargar(busqueda, filtroEstado, page, filtroSectorId, filtroAfiliadoPor)
+    cargarResumen()
+  }
 
   // --- Exportar a Excel ----------------------------------------------------
 
@@ -513,6 +542,13 @@ export default function AfiliadosLegalesPage() {
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={compararConAfiliados}
+              disabled={comparando}
+              className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50"
+              style={{ background: '#b45309' }}>
+              {comparando ? 'Comparando...' : 'Comparar con afiliados'}
+            </button>
+            <button
               onClick={exportarDatos}
               disabled={exportando}
               className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50"
@@ -530,6 +566,15 @@ export default function AfiliadosLegalesPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-5">
+        {mensajeComparacion && (
+          <div
+            className="text-sm rounded-lg px-4 py-3 border"
+            style={mensajeComparacion.tipo === 'ok'
+              ? { background: '#dcfce7', color: '#166534', borderColor: '#bbf7d0' }
+              : { background: '#fee2e2', color: '#991b1b', borderColor: '#fecaca' }}>
+            {mensajeComparacion.texto}
+          </div>
+        )}
         <div className="card">
           <div className="flex gap-2 flex-wrap">
             <input
