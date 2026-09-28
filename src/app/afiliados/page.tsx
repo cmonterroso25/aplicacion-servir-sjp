@@ -240,13 +240,32 @@ export default function AfiliadosPage() {
         .from('afiliados')
         .select(SELECT_AFILIADOS, { count: 'exact' })
         .order('primer_apellido')
+        .order('primer_nombre')
 
       if (ROLES_SOLO_PROPIOS.includes(rol)) q = q.eq('encargado_id', userId)
       if (ROLES_FILTRAN_POR_AFILIADO_POR.includes(rol)) q = q.eq('afiliado_por', identificadorPropio)
 
-      // Buscador principal (arriba): solo DPI
+      // Buscador principal (arriba): DPI (coincidencia del termino
+      // completo) o nombre/apellidos. Si el termino tiene varias palabras
+      // (ej. "Carlos Martinez"), cada palabra debe coincidir en ALGUNO de
+      // los 4 campos de nombre, sin importar en cual ni el orden, para
+      // poder encontrar a alguien aunque "Carlos" este en primer_nombre y
+      // "Martinez" en segundo_apellido.
       if (termino.trim().length >= 2) {
-        q = q.ilike('dpi', `%${termino.trim()}%`)
+        const t = termino.trim()
+        const palabras = t.split(/\s+/).filter(Boolean)
+
+        if (palabras.length <= 1) {
+          q = q.or(
+            `dpi.ilike.%${t}%,primer_apellido.ilike.%${t}%,segundo_apellido.ilike.%${t}%,primer_nombre.ilike.%${t}%,segundo_nombre.ilike.%${t}%`
+          )
+        } else {
+          palabras.forEach((palabra) => {
+            q = q.or(
+              `primer_apellido.ilike.%${palabra}%,segundo_apellido.ilike.%${palabra}%,primer_nombre.ilike.%${palabra}%,segundo_nombre.ilike.%${palabra}%`
+            )
+          })
+        }
       }
 
       // Filtros por columna
@@ -668,7 +687,7 @@ export default function AfiliadosPage() {
               onChange={(e) => setBusqueda(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleBuscar()}
               className="input-field flex-1"
-              placeholder="Buscar por DPI (en toda la base de datos)..."
+              placeholder="Buscar por DPI, nombre o apellido..."
             />
             {busqueda && (
               <button onClick={() => { setBusqueda(''); setPage(1); if (perfil) cargarAfiliados(perfil.rol, perfil.id, identificadorPropio, '', filtros, 1) }} className="px-3 rounded-lg border text-sm" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
