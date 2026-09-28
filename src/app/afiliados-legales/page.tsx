@@ -250,11 +250,10 @@ export default function AfiliadosLegalesPage() {
     }
     const fila: any = Array.isArray(data) ? data[0] : data
     const vinculados = fila?.vinculados_nuevos ?? 0
+    const completados = fila?.datos_completados ?? 0
     setMensajeComparacion({
       tipo: 'ok',
-      texto: vinculados === 0
-        ? 'Comparación completada: no se encontraron nuevas coincidencias por DPI.'
-        : `Comparación completada: se vincularon ${vinculados} afiliado${vinculados !== 1 ? 's' : ''} legal${vinculados !== 1 ? 'es' : ''}.`,
+      texto: `Comparación completada: ${vinculados} nuevo${vinculados !== 1 ? 's' : ''} vinculado${vinculados !== 1 ? 's' : ''} y ${completados} registro${completados !== 1 ? 's' : ''} con datos completados desde afiliados.`,
     })
     cargar(busqueda, filtroEstado, page, filtroSectorId, filtroAfiliadoPor)
     cargarResumen()
