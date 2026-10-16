@@ -931,8 +931,10 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                     // Escala de colores: amarillo claro → amarillo → naranja → rojo oscuro
                     let heatColor = '#f5f5f5' // gris muy claro para sin datos
                     if (intensity > 0) {
-                      if (intensity > 0.75) {
-                        heatColor = '#c41e3a' // rojo oscuro
+                      if (intensity > 0.87) {
+                        heatColor = '#c41e3a' // rojo muy oscuro
+                      } else if (intensity > 0.75) {
+                        heatColor = '#d32f2f' // rojo oscuro
                       } else if (intensity > 0.5) {
                         heatColor = '#ff6b35' // naranja rojo
                       } else if (intensity > 0.25) {
@@ -1141,6 +1143,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
           const rango25 = Math.ceil(maxAfiliados * 0.25)
           const rango50 = Math.ceil(maxAfiliados * 0.5)
           const rango75 = Math.ceil(maxAfiliados * 0.75)
+          const rango87 = Math.ceil(maxAfiliados * 0.87)
 
           return (
             <div className="bg-gray-50 rounded p-1.5 text-xs">
@@ -1148,7 +1151,11 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
               <div className="grid grid-cols-2 gap-1">
                 <div className="flex items-center gap-1">
                   <div className="w-3 h-3 rounded" style={{ backgroundColor: '#c41e3a' }}></div>
-                  <span className="text-gray-600 text-xs">{rango75}-{maxAfiliados}</span>
+                  <span className="text-gray-600 text-xs">{rango87}-{maxAfiliados}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: '#d32f2f' }}></div>
+                  <span className="text-gray-600 text-xs">{rango75}-{rango87}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ff6b35' }}></div>
@@ -1158,7 +1165,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                   <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ffa500' }}></div>
                   <span className="text-gray-600 text-xs">{rango25}-{rango50}</span>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 col-span-2">
                   <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ffeb3b' }}></div>
                   <span className="text-gray-600 text-xs">1-{rango25}</span>
                 </div>
@@ -1258,6 +1265,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
           const rango25 = Math.ceil(maxAfiliados * 0.25)
           const rango50 = Math.ceil(maxAfiliados * 0.5)
           const rango75 = Math.ceil(maxAfiliados * 0.75)
+          const rango87 = Math.ceil(maxAfiliados * 0.87)
 
           return (
             <div className="bg-white rounded-lg p-4 border border-gray-300 shadow-lg">
@@ -1265,7 +1273,11 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded" style={{ backgroundColor: '#c41e3a' }}></div>
-                  <span className="text-xs text-gray-600">{rango75}-{maxAfiliados}</span>
+                  <span className="text-xs text-gray-600">{rango87}-{maxAfiliados}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded" style={{ backgroundColor: '#d32f2f' }}></div>
+                  <span className="text-xs text-gray-600">{rango75}-{rango87}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded" style={{ backgroundColor: '#ff6b35' }}></div>
