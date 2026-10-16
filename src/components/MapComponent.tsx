@@ -996,45 +996,45 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
       </div>
 
       {/* Selector de vista y botones de región - MÓVIL (abajo) */}
-      <div className="sm:hidden fixed bottom-2 left-2 right-2 z-50 bg-white rounded-lg p-3 shadow-lg border border-gray-300 max-h-52 overflow-y-auto">
+      <div className="sm:hidden fixed bottom-2 left-2 right-2 z-50 bg-white rounded-lg p-2 shadow-lg border border-gray-300 max-h-48 overflow-y-auto">
         {/* Selector Coordinadores/Afiliados */}
-        <div className="flex gap-1 mb-3">
+        <div className="flex gap-1 mb-2">
           <button
             onClick={() => {
               setViewMode('coordinadores')
               setSelectedView(`coordinadores-${filterMode}`)
             }}
-            className={`flex-1 px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex-1 px-2 py-0.5 rounded text-xs font-semibold transition-all ${
               viewMode === 'coordinadores'
                 ? 'bg-green-600 text-white shadow-lg'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-50'
             }`}
           >
-            Coordinadores
+            Coord
           </button>
           <button
             onClick={() => {
               setViewMode('afiliados')
               setSelectedView(`afiliados-${filterMode}`)
             }}
-            className={`flex-1 px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex-1 px-2 py-0.5 rounded text-xs font-semibold transition-all ${
               viewMode === 'afiliados'
                 ? 'bg-cyan-600 text-white shadow-lg'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-50'
             }`}
           >
-            Afiliados
+            Afil
           </button>
         </div>
 
         {/* Botones de región (móvil - horizontal) */}
-        <div className="flex gap-1 mb-3">
+        <div className="flex gap-1 mb-2">
           <button
             onClick={() => {
               setFilterMode('all')
               setSelectedView(`${viewMode}-all`)
             }}
-            className={`flex-1 px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex-1 px-2 py-0.5 rounded text-xs font-semibold transition-all ${
               filterMode === 'all'
                 ? 'bg-blue-600 text-white shadow-lg'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-50'
@@ -1047,20 +1047,20 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
               setFilterMode('urbana')
               setSelectedView(`${viewMode}-urbana`)
             }}
-            className={`flex-1 px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex-1 px-2 py-0.5 rounded text-xs font-semibold transition-all ${
               filterMode === 'urbana'
                 ? 'bg-blue-600 text-white shadow-lg'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-50'
             }`}
           >
-            Urbana
+            Urb
           </button>
           <button
             onClick={() => {
               setFilterMode('casco')
               setSelectedView(`${viewMode}-casco`)
             }}
-            className={`flex-1 px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex-1 px-2 py-0.5 rounded text-xs font-semibold transition-all ${
               filterMode === 'casco'
                 ? 'bg-blue-600 text-white shadow-lg'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-50'
@@ -1070,7 +1070,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
           </button>
         </div>
 
-        {/* Leyenda móvil compacta */}
+        {/* Leyenda móvil compacta - 2 columnas */}
         {viewMode === 'afiliados' && (() => {
           const maxAfiliados = Math.max(...Object.values(afiliadosPorNombre).filter(v => typeof v === 'number'), 0)
           const rango25 = Math.ceil(maxAfiliados * 0.25)
@@ -1078,28 +1078,24 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
           const rango75 = Math.ceil(maxAfiliados * 0.75)
 
           return (
-            <div className="bg-gray-50 rounded p-2 text-xs space-y-1">
-              <p className="font-bold text-gray-700">Densidad de Afiliados</p>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded" style={{ backgroundColor: '#c41e3a' }}></div>
-                  <span className="text-gray-600">{rango75}-{maxAfiliados}</span>
+            <div className="bg-gray-50 rounded p-1.5 text-xs">
+              <p className="font-bold text-gray-700 mb-1 text-xs">Densidad</p>
+              <div className="grid grid-cols-2 gap-1">
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: '#c41e3a' }}></div>
+                  <span className="text-gray-600 text-xs">{rango75}-{maxAfiliados}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded" style={{ backgroundColor: '#ff6b35' }}></div>
-                  <span className="text-gray-600">{rango50}-{rango75}</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ff6b35' }}></div>
+                  <span className="text-gray-600 text-xs">{rango50}-{rango75}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded" style={{ backgroundColor: '#ffa500' }}></div>
-                  <span className="text-gray-600">{rango25}-{rango50}</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ffa500' }}></div>
+                  <span className="text-gray-600 text-xs">{rango25}-{rango50}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded" style={{ backgroundColor: '#ffeb3b' }}></div>
-                  <span className="text-gray-600">1-{rango25}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded" style={{ backgroundColor: '#f5f5f5', border: '1px solid #ccc' }}></div>
-                  <span className="text-xs text-gray-600">Sin datos</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ffeb3b' }}></div>
+                  <span className="text-gray-600 text-xs">1-{rango25}</span>
                 </div>
               </div>
             </div>
