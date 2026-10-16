@@ -1032,6 +1032,14 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
         )}
       </div>
 
+      {/* Título dinámico - MÓVIL */}
+      <div className="sm:hidden fixed top-16 left-2 right-2 z-40">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-lg text-center font-semibold text-sm shadow-lg">
+          {viewMode === 'coordinadores' ? '👥 Coordinadores' : '📊 Afiliados'}
+          {filterMode === 'all' ? ' - San José Pinula' : filterMode === 'urbana' ? ' - Area Urbana' : ' - Casco Urbano'}
+        </div>
+      </div>
+
       {/* Botón toggle para mostrar/ocultar controles - MÓVIL */}
       {!showControls && (
         <button
@@ -1160,6 +1168,14 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
         })()}
       </div>
       )}
+
+      {/* Título dinámico - DESKTOP */}
+      <div className="hidden sm:fixed top-20 left-20 z-40 sm:block">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg font-semibold text-base shadow-lg whitespace-nowrap">
+          {viewMode === 'coordinadores' ? '👥 Coordinadores' : '📊 Afiliados'}
+          {filterMode === 'all' ? ' - San José Pinula' : filterMode === 'urbana' ? ' - Area Urbana' : ' - Casco Urbano'}
+        </div>
+      </div>
 
       {/* Selector de vista y botones de región - DESKTOP (derecha) */}
       <div className="hidden sm:fixed top-20 right-2 z-50 w-72 sm:block">
