@@ -995,16 +995,124 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
         )}
       </div>
 
-      {/* Selector de vista y botones de región */}
-      <div className="fixed top-20 left-2 right-2 sm:left-20 sm:right-auto z-50 max-w-xs">
+      {/* Selector de vista y botones de región - MÓVIL (abajo) */}
+      <div className="sm:hidden fixed bottom-2 left-2 right-2 z-50 bg-white rounded-lg p-3 shadow-lg border border-gray-300">
         {/* Selector Coordinadores/Afiliados */}
-        <div className="flex gap-1 sm:gap-2 mb-4">
+        <div className="flex gap-1 mb-3">
           <button
             onClick={() => {
               setViewMode('coordinadores')
               setSelectedView(`coordinadores-${filterMode}`)
             }}
-            className={`flex-1 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+            className={`flex-1 px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
+              viewMode === 'coordinadores'
+                ? 'bg-green-600 text-white shadow-lg'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            Coordinadores
+          </button>
+          <button
+            onClick={() => {
+              setViewMode('afiliados')
+              setSelectedView(`afiliados-${filterMode}`)
+            }}
+            className={`flex-1 px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
+              viewMode === 'afiliados'
+                ? 'bg-cyan-600 text-white shadow-lg'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            Afiliados
+          </button>
+        </div>
+
+        {/* Botones de región (móvil - horizontal) */}
+        <div className="flex gap-1 mb-3">
+          <button
+            onClick={() => {
+              setFilterMode('all')
+              setSelectedView(`${viewMode}-all`)
+            }}
+            className={`flex-1 px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
+              filterMode === 'all'
+                ? 'bg-blue-600 text-white shadow-lg'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            SJP
+          </button>
+          <button
+            onClick={() => {
+              setFilterMode('urbana')
+              setSelectedView(`${viewMode}-urbana`)
+            }}
+            className={`flex-1 px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
+              filterMode === 'urbana'
+                ? 'bg-blue-600 text-white shadow-lg'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            Urbana
+          </button>
+          <button
+            onClick={() => {
+              setFilterMode('casco')
+              setSelectedView(`${viewMode}-casco`)
+            }}
+            className={`flex-1 px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
+              filterMode === 'casco'
+                ? 'bg-blue-600 text-white shadow-lg'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            Casco
+          </button>
+        </div>
+
+        {/* Leyenda móvil compacta */}
+        {viewMode === 'afiliados' && (() => {
+          const maxAfiliados = Math.max(...Object.values(afiliadosPorNombre).filter(v => typeof v === 'number'), 0)
+          return (
+            <div className="bg-gray-50 rounded p-2 text-xs">
+              <p className="font-bold text-gray-700 mb-1">Densidad</p>
+              <div className="grid grid-cols-2 gap-1">
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: '#c41e3a' }}></div>
+                  <span className="text-gray-600">Muy alta</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ff6b35' }}></div>
+                  <span className="text-gray-600">Alta</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ffa500' }}></div>
+                  <span className="text-gray-600">Media</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ffeb3b' }}></div>
+                  <span className="text-gray-600">Baja</span>
+                </div>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-4 h-4 sm:w-6 sm:h-6 rounded" style={{ backgroundColor: '#f5f5f5', border: '1px solid #ccc' }}></div>
+                  <span className="text-xs text-gray-600">Sin datos</span>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+      </div>
+
+      {/* Selector de vista y botones de región - DESKTOP (derecha) */}
+      <div className="hidden sm:fixed top-20 right-2 z-50 w-72 sm:block">
+        {/* Selector Coordinadores/Afiliados */}
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => {
+              setViewMode('coordinadores')
+              setSelectedView(`coordinadores-${filterMode}`)
+            }}
+            className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
               viewMode === 'coordinadores'
                 ? 'bg-green-600 text-white shadow-lg'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -1017,7 +1125,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
               setViewMode('afiliados')
               setSelectedView(`afiliados-${filterMode}`)
             }}
-            className={`flex-1 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+            className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
               viewMode === 'afiliados'
                 ? 'bg-cyan-600 text-white shadow-lg'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -1027,14 +1135,14 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
           </button>
         </div>
 
-        {/* Botones de región (fijos) */}
-        <div className="space-y-1 sm:space-y-2">
+        {/* Botones de región (desktop - vertical) */}
+        <div className="space-y-2 mb-4">
           <button
             onClick={() => {
               setFilterMode('all')
               setSelectedView(`${viewMode}-all`)
             }}
-            className={`block w-full px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+            className={`block w-full px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
               filterMode === 'all'
                 ? 'bg-blue-600 text-white shadow-lg'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -1047,7 +1155,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
               setFilterMode('urbana')
               setSelectedView(`${viewMode}-urbana`)
             }}
-            className={`block w-full px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+            className={`block w-full px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
               filterMode === 'urbana'
                 ? 'bg-blue-600 text-white shadow-lg'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -1060,7 +1168,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
               setFilterMode('casco')
               setSelectedView(`${viewMode}-casco`)
             }}
-            className={`block w-full px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+            className={`block w-full px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
               filterMode === 'casco'
                 ? 'bg-blue-600 text-white shadow-lg'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -1070,7 +1178,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
           </button>
         </div>
 
-        {/* Leyenda para mapa de calor */}
+        {/* Leyenda para mapa de calor (desktop) */}
         {viewMode === 'afiliados' && (() => {
           const maxAfiliados = Math.max(...Object.values(afiliadosPorNombre).filter(v => typeof v === 'number'), 0)
           const rango25 = Math.ceil(maxAfiliados * 0.25)
@@ -1078,28 +1186,24 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
           const rango75 = Math.ceil(maxAfiliados * 0.75)
 
           return (
-            <div className="mt-2 sm:mt-6 bg-white rounded-lg p-2 sm:p-4 border border-gray-300 shadow-lg">
-              <h3 className="font-bold text-gray-700 mb-2 text-xs sm:text-sm">Densidad de Afiliados</h3>
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <div className="w-4 h-4 sm:w-6 sm:h-6 rounded" style={{ backgroundColor: '#c41e3a' }}></div>
+            <div className="bg-white rounded-lg p-4 border border-gray-300 shadow-lg">
+              <h3 className="font-bold text-gray-700 mb-3 text-sm">Densidad de Afiliados</h3>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded" style={{ backgroundColor: '#c41e3a' }}></div>
                   <span className="text-xs text-gray-600">{rango75}-{maxAfiliados}</span>
                 </div>
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <div className="w-4 h-4 sm:w-6 sm:h-6 rounded" style={{ backgroundColor: '#ff6b35' }}></div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded" style={{ backgroundColor: '#ff6b35' }}></div>
                   <span className="text-xs text-gray-600">{rango50}-{rango75}</span>
                 </div>
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <div className="w-4 h-4 sm:w-6 sm:h-6 rounded" style={{ backgroundColor: '#ffa500' }}></div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded" style={{ backgroundColor: '#ffa500' }}></div>
                   <span className="text-xs text-gray-600">{rango25}-{rango50}</span>
                 </div>
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <div className="w-4 h-4 sm:w-6 sm:h-6 rounded" style={{ backgroundColor: '#ffeb3b' }}></div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded" style={{ backgroundColor: '#ffeb3b' }}></div>
                   <span className="text-xs text-gray-600">1-{rango25}</span>
-                </div>
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <div className="w-4 h-4 sm:w-6 sm:h-6 rounded" style={{ backgroundColor: '#f5f5f5', border: '1px solid #ccc' }}></div>
-                  <span className="text-xs text-gray-600">Sin datos</span>
                 </div>
               </div>
             </div>
