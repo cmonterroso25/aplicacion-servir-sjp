@@ -781,10 +781,10 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
 
                 // Calcular bounds del polígono
                 const bounds_poly = {
-                  minX: Math.min(...polygonPoints.map(p => p.x)),
-                  maxX: Math.max(...polygonPoints.map(p => p.x)),
-                  minY: Math.min(...polygonPoints.map(p => p.y)),
-                  maxY: Math.max(...polygonPoints.map(p => p.y)),
+                  minX: Math.min(...polygonPoints.map((p: any) => p.x)),
+                  maxX: Math.max(...polygonPoints.map((p: any) => p.x)),
+                  minY: Math.min(...polygonPoints.map((p: any) => p.y)),
+                  maxY: Math.max(...polygonPoints.map((p: any) => p.y)),
                 }
 
                 // Generar puntos distribuidos
