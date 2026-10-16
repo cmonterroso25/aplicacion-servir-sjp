@@ -790,13 +790,14 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                   maxY: Math.max(...polygonPoints.map((p: any) => p.y)),
                 }
 
-                // Agregar margen de seguridad del 5% para evitar puntos en bordes
-                const margin = Math.min(rawBounds.maxX - rawBounds.minX, rawBounds.maxY - rawBounds.minY) * 0.05
+                // Agregar margen de seguridad del 15% para evitar puntos en bordes
+                const marginX = (rawBounds.maxX - rawBounds.minX) * 0.15
+                const marginY = (rawBounds.maxY - rawBounds.minY) * 0.15
                 const bounds_poly = {
-                  minX: rawBounds.minX + margin,
-                  maxX: rawBounds.maxX - margin,
-                  minY: rawBounds.minY + margin,
-                  maxY: rawBounds.maxY - margin,
+                  minX: rawBounds.minX + marginX,
+                  maxX: rawBounds.maxX - marginX,
+                  minY: rawBounds.minY + marginY,
+                  maxY: rawBounds.maxY - marginY,
                 }
 
                 // Generar puntos distribuidos
