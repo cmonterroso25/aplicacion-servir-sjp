@@ -36,6 +36,13 @@ const SECTORES_ALDEA_SAN_LUIS = [
   'Aldea San Luis',
 ]
 
+// Sectores que solo muestran contorno sin relleno
+const SECTORES_SOLO_CONTORNO = [
+  'San Luis Letrán',
+  'San Luis Puerta Negra',
+  'Los de a 20',
+]
+
 const SECTORES_CASCO_URBANO_COLORS = ['Zona 1', 'Zona 2', 'Zona 3', 'Zona 4', 'Colonia Santa Sofía']
 const COLOR_CASCO_URBANO = '#d32f2f' // Rojo
 
@@ -612,18 +619,22 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                   const textX = centerX_svg + (centerLon - centerLon_mid) * scale
                   const textY = centerY_svg - (centerLat - centerLat_mid) * scale
 
+                  const soloContorno = SECTORES_SOLO_CONTORNO.includes(name)
+
                   return (
                     <g key={idx}>
-                      <path
-                        d={pathData}
-                        fill={baseColor}
-                        fillOpacity="0.9"
-                        filter="url(#shadow)"
-                        style={{
-                          transition: 'all 0.3s ease',
-                          opacity: isHovered ? 1 : 0.85,
-                        }}
-                      />
+                      {!soloContorno && (
+                        <path
+                          d={pathData}
+                          fill={baseColor}
+                          fillOpacity="0.9"
+                          filter="url(#shadow)"
+                          style={{
+                            transition: 'all 0.3s ease',
+                            opacity: isHovered ? 1 : 0.85,
+                          }}
+                        />
+                      )}
                       <path
                         d={pathData}
                         fill="url(#grad)"
@@ -634,7 +645,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                         d={pathData}
                         fill="none"
                         stroke={isSelected ? '#ffffff' : darkColor}
-                        strokeWidth={isSelected ? 4 : isHovered ? 3 : 2}
+                        strokeWidth={soloContorno ? (isSelected ? 5 : isHovered ? 4 : 3) : (isSelected ? 4 : isHovered ? 3 : 2)}
                         strokeLinejoin="round"
                         strokeLinecap="round"
                         opacity={isSelected ? 1 : 0.8}
