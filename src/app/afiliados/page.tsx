@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { supabase, type Afiliado, type Perfil, type Sector } from '@/lib/supabase'
 import { TIPOS_UBICACION, OPCIONES_UBICACION, type TipoUbicacion } from '@/lib/ubicaciones'
 import NavBar from '@/components/NavBar'
@@ -140,6 +140,7 @@ function formatNombreCoordinador(c: CoordinadorOpcion | null | undefined) {
 
 export default function AfiliadosPage() {
   const router = useRouter()
+  const pathname = usePathname()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [afiliados, setAfiliados] = useState<Afiliado[]>([])
   const [sectoresList, setSectoresList] = useState<Sector[]>([])
@@ -673,6 +674,33 @@ export default function AfiliadosPage() {
           <div className="flex items-center gap-2">
             <button onClick={() => router.push('/afiliados/nuevo')} className="text-sm px-4 py-1.5 rounded-lg font-semibold text-white" style={{ background: '#004466' }}>
               + Nuevo
+            </button>
+          </div>
+        </div>
+        {/* Sub-navegación */}
+        <div className="max-w-7xl mx-auto px-4 border-t" style={{ borderColor: 'var(--color-borde)' }}>
+          <div className="flex gap-1">
+            <button
+              onClick={() => router.push('/afiliados')}
+              className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
+              style={
+                pathname === '/afiliados' || pathname.startsWith('/afiliados/nuevo') || pathname.startsWith('/afiliados/editar')
+                  ? { borderBottomColor: '#004466', color: '#004466' }
+                  : { borderBottomColor: 'transparent', color: 'var(--texto-secundario)' }
+              }
+            >
+              Afiliados
+            </button>
+            <button
+              onClick={() => router.push('/afiliados-legales')}
+              className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
+              style={
+                pathname === '/afiliados-legales' || pathname.startsWith('/afiliados-legales/')
+                  ? { borderBottomColor: '#004466', color: '#004466' }
+                  : { borderBottomColor: 'transparent', color: 'var(--texto-secundario)' }
+              }
+            >
+              Afiliados legales
             </button>
           </div>
         </div>
