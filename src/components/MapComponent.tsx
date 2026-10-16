@@ -782,17 +782,26 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                   return inside
                 }
 
-                // Calcular bounds del polígono
-                const bounds_poly = {
+                // Calcular bounds del polígono con margen de seguridad
+                const rawBounds = {
                   minX: Math.min(...polygonPoints.map((p: any) => p.x)),
                   maxX: Math.max(...polygonPoints.map((p: any) => p.x)),
                   minY: Math.min(...polygonPoints.map((p: any) => p.y)),
                   maxY: Math.max(...polygonPoints.map((p: any) => p.y)),
                 }
 
+                // Agregar margen de seguridad del 5% para evitar puntos en bordes
+                const margin = Math.min(rawBounds.maxX - rawBounds.minX, rawBounds.maxY - rawBounds.minY) * 0.05
+                const bounds_poly = {
+                  minX: rawBounds.minX + margin,
+                  maxX: rawBounds.maxX - margin,
+                  minY: rawBounds.minY + margin,
+                  maxY: rawBounds.maxY - margin,
+                }
+
                 // Generar puntos distribuidos
                 const generatedPoints = []
-                const cellSize = Math.sqrt((bounds_poly.maxX - bounds_poly.minX) * (bounds_poly.maxY - bounds_poly.minY) / Math.max(1, numCoordinadores * 2))
+                const cellSize = Math.sqrt((bounds_poly.maxX - bounds_poly.minX) * (bounds_poly.maxY - bounds_poly.minY) / Math.max(1, numCoordinadores * 1.5))
 
                 // Primera pasada: generar más puntos candidatos que necesarios
                 const candidatePoints = []
