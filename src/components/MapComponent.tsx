@@ -645,7 +645,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                         d={pathData}
                         fill="none"
                         stroke={isSelected ? '#ffffff' : darkColor}
-                        strokeWidth={soloContorno ? (isSelected ? 5 : isHovered ? 4 : 3) : (isSelected ? 4 : isHovered ? 3 : 2)}
+                        strokeWidth={isSelected ? 4 : isHovered ? 3 : 2}
                         strokeLinejoin="round"
                         strokeLinecap="round"
                         opacity={isSelected ? 1 : 0.8}
@@ -982,11 +982,11 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                           <path
                             d={pathData}
                             fill="none"
-                            stroke={soloContorno ? darkenColor(sectorColorMap.current[name] || '#42a5f5', 0.4) : darkenColor(heatColor, 0.4)}
-                            strokeWidth={soloContorno ? (hoveredSector === name ? 4 : 3) : (hoveredSector === name ? 3 : 1.5)}
+                            stroke={darkenColor(heatColor, 0.4)}
+                            strokeWidth={hoveredSector === name ? 3 : 1.5}
                             strokeLinejoin="round"
                             strokeLinecap="round"
-                            opacity={soloContorno ? "0.8" : "0.6"}
+                            opacity="0.6"
                             style={{
                               transition: 'all 0.3s ease',
                             }}
