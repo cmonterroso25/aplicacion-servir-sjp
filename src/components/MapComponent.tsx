@@ -996,15 +996,15 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
       </div>
 
       {/* Selector de vista y botones de región */}
-      <div className="fixed top-20 left-20 z-50">
+      <div className="fixed top-20 left-2 right-2 sm:left-20 sm:right-auto z-50 max-w-xs">
         {/* Selector Coordinadores/Afiliados */}
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-1 sm:gap-2 mb-4">
           <button
             onClick={() => {
               setViewMode('coordinadores')
               setSelectedView(`coordinadores-${filterMode}`)
             }}
-            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+            className={`flex-1 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
               viewMode === 'coordinadores'
                 ? 'bg-green-600 text-white shadow-lg'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -1017,7 +1017,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
               setViewMode('afiliados')
               setSelectedView(`afiliados-${filterMode}`)
             }}
-            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+            className={`flex-1 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
               viewMode === 'afiliados'
                 ? 'bg-cyan-600 text-white shadow-lg'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -1028,13 +1028,13 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
         </div>
 
         {/* Botones de región (fijos) */}
-        <div className="space-y-2">
+        <div className="space-y-1 sm:space-y-2">
           <button
             onClick={() => {
               setFilterMode('all')
               setSelectedView(`${viewMode}-all`)
             }}
-            className={`block w-full px-4 py-2 rounded-lg font-semibold transition-all ${
+            className={`block w-full px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
               filterMode === 'all'
                 ? 'bg-blue-600 text-white shadow-lg'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -1047,7 +1047,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
               setFilterMode('urbana')
               setSelectedView(`${viewMode}-urbana`)
             }}
-            className={`block w-full px-4 py-2 rounded-lg font-semibold transition-all ${
+            className={`block w-full px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
               filterMode === 'urbana'
                 ? 'bg-blue-600 text-white shadow-lg'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -1060,7 +1060,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
               setFilterMode('casco')
               setSelectedView(`${viewMode}-casco`)
             }}
-            className={`block w-full px-4 py-2 rounded-lg font-semibold transition-all ${
+            className={`block w-full px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
               filterMode === 'casco'
                 ? 'bg-blue-600 text-white shadow-lg'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
@@ -1078,27 +1078,27 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
           const rango75 = Math.ceil(maxAfiliados * 0.75)
 
           return (
-            <div className="mt-6 bg-white rounded-lg p-4 border border-gray-300 shadow-lg">
-              <h3 className="font-bold text-gray-700 mb-3 text-sm">Densidad de Afiliados</h3>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded" style={{ backgroundColor: '#c41e3a' }}></div>
-                  <span className="text-xs text-gray-600">{rango75} - {maxAfiliados} (Muy Alta)</span>
+            <div className="mt-2 sm:mt-6 bg-white rounded-lg p-2 sm:p-4 border border-gray-300 shadow-lg">
+              <h3 className="font-bold text-gray-700 mb-2 text-xs sm:text-sm">Densidad de Afiliados</h3>
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-4 h-4 sm:w-6 sm:h-6 rounded" style={{ backgroundColor: '#c41e3a' }}></div>
+                  <span className="text-xs text-gray-600">{rango75}-{maxAfiliados}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded" style={{ backgroundColor: '#ff6b35' }}></div>
-                  <span className="text-xs text-gray-600">{rango50} - {rango75} (Alta)</span>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-4 h-4 sm:w-6 sm:h-6 rounded" style={{ backgroundColor: '#ff6b35' }}></div>
+                  <span className="text-xs text-gray-600">{rango50}-{rango75}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded" style={{ backgroundColor: '#ffa500' }}></div>
-                  <span className="text-xs text-gray-600">{rango25} - {rango50} (Media)</span>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-4 h-4 sm:w-6 sm:h-6 rounded" style={{ backgroundColor: '#ffa500' }}></div>
+                  <span className="text-xs text-gray-600">{rango25}-{rango50}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded" style={{ backgroundColor: '#ffeb3b' }}></div>
-                  <span className="text-xs text-gray-600">1 - {rango25} (Baja)</span>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-4 h-4 sm:w-6 sm:h-6 rounded" style={{ backgroundColor: '#ffeb3b' }}></div>
+                  <span className="text-xs text-gray-600">1-{rango25}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded" style={{ backgroundColor: '#f5f5f5', border: '1px solid #ccc' }}></div>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="w-4 h-4 sm:w-6 sm:h-6 rounded" style={{ backgroundColor: '#f5f5f5', border: '1px solid #ccc' }}></div>
                   <span className="text-xs text-gray-600">Sin datos</span>
                 </div>
               </div>
