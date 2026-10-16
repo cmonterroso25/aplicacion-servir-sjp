@@ -963,26 +963,30 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                         svgDimensions.height
                       )
 
+                      const soloContorno = SECTORES_SOLO_CONTORNO.includes(name)
+
                       return (
                         <g key={`heat-${idx}`}>
-                          <path
-                            d={pathData}
-                            fill={heatColor}
-                            fillOpacity="0.85"
-                            filter="url(#shadow)"
-                            style={{
-                              transition: 'all 0.3s ease',
-                              opacity: hoveredSector === name ? 1 : 0.85,
-                            }}
-                          />
+                          {!soloContorno && (
+                            <path
+                              d={pathData}
+                              fill={heatColor}
+                              fillOpacity="0.85"
+                              filter="url(#shadow)"
+                              style={{
+                                transition: 'all 0.3s ease',
+                                opacity: hoveredSector === name ? 1 : 0.85,
+                              }}
+                            />
+                          )}
                           <path
                             d={pathData}
                             fill="none"
-                            stroke={darkenColor(heatColor, 0.4)}
-                            strokeWidth={hoveredSector === name ? 3 : 1.5}
+                            stroke={soloContorno ? '#666666' : darkenColor(heatColor, 0.4)}
+                            strokeWidth={soloContorno ? (hoveredSector === name ? 4 : 3) : (hoveredSector === name ? 3 : 1.5)}
                             strokeLinejoin="round"
                             strokeLinecap="round"
-                            opacity="0.6"
+                            opacity={soloContorno ? "0.9" : "0.6"}
                             style={{
                               transition: 'all 0.3s ease',
                             }}
