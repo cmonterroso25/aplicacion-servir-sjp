@@ -140,7 +140,7 @@ function calculateBounds(features: any[]): { minLon: number; maxLon: number; min
 }
 
 function coordinatesToPath(coords: [number, number][], activeBounds: any, width: number, height: number): string {
-  const padding = 60
+  const padding = 20
   const availWidth = width - padding * 2
   const availHeight = height - padding * 2
 
