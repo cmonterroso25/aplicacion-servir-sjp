@@ -7,6 +7,11 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'Consulta Empadronados — San José Pinula',
   description: 'Herramienta interna de consulta de empadronados',
+  icons: {
+    icon: '/servir-icon.jpg',
+    shortcut: '/servir-icon.jpg',
+    apple: '/servir-icon.jpg',
+  },
 }
 
 export default function RootLayout({
