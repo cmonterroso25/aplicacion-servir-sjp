@@ -982,11 +982,11 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                           <path
                             d={pathData}
                             fill="none"
-                            stroke={soloContorno ? '#666666' : darkenColor(heatColor, 0.4)}
+                            stroke={darkenColor(baseColor, 0.4)}
                             strokeWidth={soloContorno ? (hoveredSector === name ? 4 : 3) : (hoveredSector === name ? 3 : 1.5)}
                             strokeLinejoin="round"
                             strokeLinecap="round"
-                            opacity={soloContorno ? "0.9" : "0.6"}
+                            opacity={soloContorno ? "0.8" : "0.6"}
                             style={{
                               transition: 'all 0.3s ease',
                             }}
