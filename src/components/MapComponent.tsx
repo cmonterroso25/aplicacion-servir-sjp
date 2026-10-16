@@ -185,6 +185,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
   const [afiliadosPorNombre, setAfiliadosPorNombre] = useState<Record<string, number>>({})
   const [selectedView, setSelectedView] = useState<string>('coordinadores-all')
   const [isMobile, setIsMobile] = useState(false)
+  const [showControls, setShowControls] = useState(true)
   const sectorColorMap = useRef<Record<string, string>>({})
   const sectorEncargadoMap = useRef<Record<string, string>>({})
   const sectorSupabaseIdMap = useRef<Record<string, number>>({})
@@ -1021,8 +1022,19 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
         )}
       </div>
 
+      {/* Botón toggle para mostrar/ocultar controles - MÓVIL */}
+      {!showControls && (
+        <button
+          onClick={() => setShowControls(true)}
+          className="sm:hidden fixed bottom-4 left-4 z-50 bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-semibold shadow-lg hover:bg-blue-700 transition-all"
+        >
+          📊 Ver controles
+        </button>
+      )}
+
       {/* Selector de vista y botones de región - MÓVIL (abajo) */}
-      <div className="sm:hidden fixed bottom-2 left-2 right-2 z-50 bg-white rounded-lg p-2 shadow-lg border border-gray-300 max-h-48 overflow-y-auto">
+      {showControls && (
+        <div className="sm:hidden fixed bottom-2 left-2 right-2 z-50 bg-white rounded-lg p-2 shadow-lg border border-gray-300 max-h-48 overflow-y-auto">
         {/* Selector Coordinadores/Afiliados */}
         <div className="flex gap-1 mb-2">
           <button
@@ -1128,6 +1140,18 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
           )
         })()}
       </div>
+      )}
+
+      {/* Botón toggle cerrar para mostrar/ocultar controles - MÓVIL */}
+      {showControls && (
+        <button
+          onClick={() => setShowControls(false)}
+          className="sm:hidden fixed bottom-60 right-4 z-50 bg-gray-700 text-white px-2 py-1.5 rounded text-xs font-semibold shadow-lg hover:bg-gray-800 transition-all"
+          title="Ocultar controles"
+        >
+          ✕
+        </button>
+      )}
 
       {/* Selector de vista y botones de región - DESKTOP (derecha) */}
       <div className="hidden sm:fixed top-20 right-2 z-50 w-72 sm:block">
