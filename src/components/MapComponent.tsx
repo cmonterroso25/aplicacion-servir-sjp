@@ -433,7 +433,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
   }, [filterMode, mapData, sectores])
 
   return (
-    <div className="w-full h-screen relative overflow-hidden">
+    <div className="w-full h-full relative overflow-hidden">
       <style>{`
         @keyframes glow {
           0%, 100% { box-shadow: 0 0 20px rgba(66, 165, 245, 0.3); }
