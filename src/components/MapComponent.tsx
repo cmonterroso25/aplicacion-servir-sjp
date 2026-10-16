@@ -11,6 +11,7 @@ interface MapComponentProps {
 interface TooltipData {
   nombre: string
   encargado?: string
+  coordinadores?: number
   x: number
   y: number
 }
@@ -644,8 +645,11 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                         fillOpacity="0"
                         stroke="none"
                         onClick={() => {
-                          setSelectedSector(name)
-                          onSelectedSectorChange?.(name)
+                          // No mostrar panel en vista de coordinadores
+                          if (viewMode !== 'coordinadores') {
+                            setSelectedSector(name)
+                            onSelectedSectorChange?.(name)
+                          }
                         }}
                         onMouseEnter={() => {
                           setHoveredSector(name)
@@ -657,9 +661,21 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                         onMouseMove={(e) => {
                           const rect = svgContainer.current?.getBoundingClientRect()
                           if (rect) {
+                            // Obtener número de coordinadores
+                            let numCoord = coordinadoresPorNombre[name] || 0
+                            if (numCoord === 0) {
+                              const nombreNormalizado = name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+                              numCoord = coordinadoresPorNombre[nombreNormalizado] || 0
+                              if (numCoord === 0) {
+                                const nombreSupabase = getNombreSupabase(name)
+                                numCoord = coordinadoresPorNombre[nombreSupabase] || 0
+                              }
+                            }
+
                             setTooltip({
                               nombre: name,
                               encargado: sectorEncargadoMap.current[name],
+                              coordinadores: numCoord,
                               x: e.clientX + 10,
                               y: e.clientY + 10,
                             })
@@ -937,8 +953,9 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                               const rect = svgContainer.current?.getBoundingClientRect()
                               if (rect) {
                                 setTooltip({
-                                  nombre: `${name}`,
-                                  encargado: `${numAfiliados} afiliados`,
+                                  nombre: name,
+                                  encargado: sectorEncargadoMap.current[name],
+                                  coordinadores: numAfiliados,
                                   x: e.clientX + 10,
                                   y: e.clientY + 10,
                                 })
@@ -967,6 +984,11 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
               >
                 <p className="nombre">{tooltip.nombre}</p>
                 {tooltip.encargado && <p className="encargado">📍 {tooltip.encargado}</p>}
+                {tooltip.coordinadores !== undefined && tooltip.coordinadores > 0 && (
+                  <p className="encargado" style={{ marginTop: '4px' }}>
+                    👥 {tooltip.coordinadores} {viewMode === 'coordinadores' ? 'coordinador' : 'afiliado'}{tooltip.coordinadores !== 1 ? 'es' : ''}
+                  </p>
+                )}
               </div>
             )}
           </>
