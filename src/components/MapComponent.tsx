@@ -996,7 +996,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
       </div>
 
       {/* Selector de vista y botones de región - MÓVIL (abajo) */}
-      <div className="sm:hidden fixed bottom-2 left-2 right-2 z-50 bg-white rounded-lg p-3 shadow-lg border border-gray-300">
+      <div className="sm:hidden fixed bottom-2 left-2 right-2 z-50 bg-white rounded-lg p-3 shadow-lg border border-gray-300 max-h-52 overflow-y-auto">
         {/* Selector Coordinadores/Afiliados */}
         <div className="flex gap-1 mb-3">
           <button
@@ -1073,28 +1073,32 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
         {/* Leyenda móvil compacta */}
         {viewMode === 'afiliados' && (() => {
           const maxAfiliados = Math.max(...Object.values(afiliadosPorNombre).filter(v => typeof v === 'number'), 0)
+          const rango25 = Math.ceil(maxAfiliados * 0.25)
+          const rango50 = Math.ceil(maxAfiliados * 0.5)
+          const rango75 = Math.ceil(maxAfiliados * 0.75)
+
           return (
-            <div className="bg-gray-50 rounded p-2 text-xs">
-              <p className="font-bold text-gray-700 mb-1">Densidad</p>
-              <div className="grid grid-cols-2 gap-1">
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded" style={{ backgroundColor: '#c41e3a' }}></div>
-                  <span className="text-gray-600">Muy alta</span>
+            <div className="bg-gray-50 rounded p-2 text-xs space-y-1">
+              <p className="font-bold text-gray-700">Densidad de Afiliados</p>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded" style={{ backgroundColor: '#c41e3a' }}></div>
+                  <span className="text-gray-600">{rango75}-{maxAfiliados}</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ff6b35' }}></div>
-                  <span className="text-gray-600">Alta</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded" style={{ backgroundColor: '#ff6b35' }}></div>
+                  <span className="text-gray-600">{rango50}-{rango75}</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ffa500' }}></div>
-                  <span className="text-gray-600">Media</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded" style={{ backgroundColor: '#ffa500' }}></div>
+                  <span className="text-gray-600">{rango25}-{rango50}</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ffeb3b' }}></div>
-                  <span className="text-gray-600">Baja</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded" style={{ backgroundColor: '#ffeb3b' }}></div>
+                  <span className="text-gray-600">1-{rango25}</span>
                 </div>
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <div className="w-4 h-4 sm:w-6 sm:h-6 rounded" style={{ backgroundColor: '#f5f5f5', border: '1px solid #ccc' }}></div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded" style={{ backgroundColor: '#f5f5f5', border: '1px solid #ccc' }}></div>
                   <span className="text-xs text-gray-600">Sin datos</span>
                 </div>
               </div>
