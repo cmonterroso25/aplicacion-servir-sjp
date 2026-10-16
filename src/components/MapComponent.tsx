@@ -140,7 +140,7 @@ function calculateBounds(features: any[]): { minLon: number; maxLon: number; min
 }
 
 function coordinatesToPath(coords: [number, number][], activeBounds: any, width: number, height: number): string {
-  const padding = 100
+  const padding = 60
   const availWidth = width - padding * 2
   const availHeight = height - padding * 2
 
@@ -150,7 +150,7 @@ function coordinatesToPath(coords: [number, number][], activeBounds: any, width:
   // Usar escala uniforme para no distorsionar
   const scaleX = availWidth / lonRange
   const scaleY = availHeight / latRange
-  const scale = Math.min(scaleX, scaleY) * 0.9
+  const scale = Math.min(scaleX, scaleY) * 1.0
 
   const centerX = padding + availWidth / 2
   const centerY = padding + availHeight / 2
@@ -596,14 +596,14 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                   const centerLon = sumX / coords.length
                   const centerLat = sumY / coords.length
 
-                  const padding = 100
+                  const padding = 60
                   const availWidth = svgDimensions.width - padding * 2
                   const availHeight = svgDimensions.height - padding * 2
                   const lonRange = bounds.maxLon - bounds.minLon || 1
                   const latRange = bounds.maxLat - bounds.minLat || 1
                   const scaleX = availWidth / lonRange
                   const scaleY = availHeight / latRange
-                  const scale = Math.min(scaleX, scaleY) * 0.8
+                  const scale = Math.min(scaleX, scaleY) * 1.0
                   const centerX_svg = padding + availWidth / 2
                   const centerY_svg = padding + availHeight / 2
                   const centerLon_mid = (bounds.minLon + bounds.maxLon) / 2
@@ -748,14 +748,14 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                 const coords = feature.geometry?.coordinates?.[0]
                 if (!coords || coords.length === 0) return null
 
-                const padding = 100
+                const padding = 60
                 const availWidth = svgDimensions.width - padding * 2
                 const availHeight = svgDimensions.height - padding * 2
                 const lonRange = displayBounds.maxLon - displayBounds.minLon || 1
                 const latRange = displayBounds.maxLat - displayBounds.minLat || 1
                 const scaleX = availWidth / lonRange
                 const scaleY = availHeight / latRange
-                const scale = Math.min(scaleX, scaleY) * 0.9
+                const scale = Math.min(scaleX, scaleY) * 1.0
                 const centerX_coord = padding + availWidth / 2
                 const centerY_coord = padding + availHeight / 2
                 const centerLon_mid = (displayBounds.minLon + displayBounds.maxLon) / 2
