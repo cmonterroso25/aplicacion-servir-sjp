@@ -1035,8 +1035,17 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
       {/* Selector de vista y botones de región - MÓVIL (abajo) */}
       {showControls && (
         <div className="sm:hidden fixed bottom-2 left-2 right-2 z-50 bg-white rounded-lg p-2 shadow-lg border border-gray-300 max-h-48 overflow-y-auto">
-        {/* Selector Coordinadores/Afiliados */}
-        <div className="flex gap-1 mb-2">
+          {/* Botón cerrar dentro del panel */}
+          <button
+            onClick={() => setShowControls(false)}
+            className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-lg"
+            title="Ocultar controles"
+          >
+            ✕
+          </button>
+
+          {/* Selector Coordinadores/Afiliados */}
+          <div className="flex gap-1 mb-2 pr-6">
           <button
             onClick={() => {
               setViewMode('coordinadores')
@@ -1140,17 +1149,6 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
           )
         })()}
       </div>
-      )}
-
-      {/* Botón toggle cerrar para mostrar/ocultar controles - MÓVIL */}
-      {showControls && (
-        <button
-          onClick={() => setShowControls(false)}
-          className="sm:hidden fixed bottom-60 right-4 z-50 bg-gray-700 text-white px-2 py-1.5 rounded text-xs font-semibold shadow-lg hover:bg-gray-800 transition-all"
-          title="Ocultar controles"
-        >
-          ✕
-        </button>
       )}
 
       {/* Selector de vista y botones de región - DESKTOP (derecha) */}
