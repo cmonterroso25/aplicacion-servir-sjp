@@ -839,14 +839,25 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                     {generatedPoints.map((point, i) => (
                       <g key={i}>
                         {isMobile ? (
-                          /* Punto pequeño verde en móvil */
-                          <circle
-                            cx={point.x}
-                            cy={point.y}
-                            r="2.5"
-                            fill="#16a34a"
-                            opacity="0.9"
-                          />
+                          <>
+                            {/* Punto verde con contorno negro en móvil */}
+                            <circle
+                              cx={point.x}
+                              cy={point.y}
+                              r="2.5"
+                              fill="#16a34a"
+                              opacity="0.9"
+                            />
+                            <circle
+                              cx={point.x}
+                              cy={point.y}
+                              r="2.5"
+                              fill="none"
+                              stroke="#000000"
+                              strokeWidth="0.8"
+                              opacity="0.7"
+                            />
+                          </>
                         ) : (
                           <>
                             {/* Círculo exterior verde oscuro */}
