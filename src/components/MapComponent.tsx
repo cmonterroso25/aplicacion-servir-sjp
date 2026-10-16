@@ -184,6 +184,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
   const [viewMode, setViewMode] = useState<'coordinadores' | 'afiliados'>('coordinadores')
   const [afiliadosPorNombre, setAfiliadosPorNombre] = useState<Record<string, number>>({})
   const [selectedView, setSelectedView] = useState<string>('coordinadores-all')
+  const [isMobile, setIsMobile] = useState(false)
   const sectorColorMap = useRef<Record<string, string>>({})
   const sectorEncargadoMap = useRef<Record<string, string>>({})
   const sectorSupabaseIdMap = useRef<Record<string, number>>({})
@@ -261,6 +262,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
           height: svgContainer.current.clientHeight,
         })
       }
+      setIsMobile(window.innerWidth < 640)
     }
 
     handleResize()
@@ -836,34 +838,47 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                   <g key={`coord-${sectorName}`}>
                     {generatedPoints.map((point, i) => (
                       <g key={i}>
-                        {/* Círculo exterior verde oscuro */}
-                        <circle
-                          cx={point.x}
-                          cy={point.y}
-                          r="8"
-                          fill="#16a34a"
-                          opacity="0.9"
-                          filter="url(#coordinador-glow)"
-                        />
-                        {/* Círculo con borde */}
-                        <circle
-                          cx={point.x}
-                          cy={point.y}
-                          r="8"
-                          fill="none"
-                          stroke="#ffffff"
-                          strokeWidth="2"
-                          opacity="0.8"
-                        />
-                        {/* Punto central blanco brillante */}
-                        <circle
-                          cx={point.x}
-                          cy={point.y}
-                          r="4"
-                          fill="#ffffff"
-                          opacity="1"
-                          filter="url(#coordinador-glow)"
-                        />
+                        {isMobile ? (
+                          /* Punto pequeño verde en móvil */
+                          <circle
+                            cx={point.x}
+                            cy={point.y}
+                            r="2.5"
+                            fill="#16a34a"
+                            opacity="0.9"
+                          />
+                        ) : (
+                          <>
+                            {/* Círculo exterior verde oscuro */}
+                            <circle
+                              cx={point.x}
+                              cy={point.y}
+                              r="8"
+                              fill="#16a34a"
+                              opacity="0.9"
+                              filter="url(#coordinador-glow)"
+                            />
+                            {/* Círculo con borde */}
+                            <circle
+                              cx={point.x}
+                              cy={point.y}
+                              r="8"
+                              fill="none"
+                              stroke="#ffffff"
+                              strokeWidth="2"
+                              opacity="0.8"
+                            />
+                            {/* Punto central blanco brillante */}
+                            <circle
+                              cx={point.x}
+                              cy={point.y}
+                              r="4"
+                              fill="#ffffff"
+                              opacity="1"
+                              filter="url(#coordinador-glow)"
+                            />
+                          </>
+                        )}
                       </g>
                     ))}
                   </g>
