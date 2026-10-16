@@ -1033,7 +1033,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
       </div>
 
       {/* Título dinámico - MÓVIL */}
-      <div className="sm:hidden fixed top-16 left-2 right-2 z-40">
+      <div className="sm:hidden fixed top-32 left-2 right-2 z-40 pointer-events-none">
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-lg text-center font-semibold text-sm shadow-lg">
           {viewMode === 'coordinadores' ? '👥 Coordinadores' : '📊 Afiliados'}
           {filterMode === 'all' ? ' - San José Pinula' : filterMode === 'urbana' ? ' - Area Urbana' : ' - Casco Urbano'}
