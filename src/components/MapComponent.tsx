@@ -553,7 +553,7 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
               width="100%"
               height="100%"
               viewBox={`0 0 ${svgDimensions.width} ${svgDimensions.height}`}
-              preserveAspectRatio="xMidYStart slice"
+              preserveAspectRatio="xMidYStart meet"
             >
               <defs>
                 <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
@@ -790,9 +790,9 @@ export default function MapComponent({ onSelectedSectorChange }: MapComponentPro
                   maxY: Math.max(...polygonPoints.map((p: any) => p.y)),
                 }
 
-                // Agregar margen de seguridad del 15% para evitar puntos en bordes
-                const marginX = (rawBounds.maxX - rawBounds.minX) * 0.15
-                const marginY = (rawBounds.maxY - rawBounds.minY) * 0.15
+                // Agregar margen de seguridad del 5% para evitar puntos en bordes
+                const marginX = (rawBounds.maxX - rawBounds.minX) * 0.05
+                const marginY = (rawBounds.maxY - rawBounds.minY) * 0.05
                 const bounds_poly = {
                   minX: rawBounds.minX + marginX,
                   maxX: rawBounds.maxX - marginX,
