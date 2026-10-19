@@ -371,6 +371,12 @@ authorization_url_path = "/oauth/consent"
 # Allow dynamic client registration
 allow_dynamic_registration = false
 
+[functions.whatsapp-procesar-recordatorios]
+# Esta función la invoca pg_cron (vía pg_net), no un usuario autenticado,
+# así que no hay JWT de sesión disponible. La autorización la hace el propio
+# código con el header x-notificacion-secret.
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

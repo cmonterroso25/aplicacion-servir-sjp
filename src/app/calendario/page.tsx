@@ -220,6 +220,15 @@ export default function CalendarioPage() {
         .delete()
         .eq('id', id)
       if (e) throw e
+      try {
+        await fetch('/api/notificar-cita', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reunionId: id }),
+        })
+      } catch (err) {
+        console.error('Error cancelando recordatorios de WhatsApp:', err)
+      }
       await cargarReuniones()
       const quedanReuniones = reuniones.filter(r => r.id !== id && r.fecha === diaSeleccionado)
       if (quedanReuniones.length === 0) setDiaSeleccionado(null)
