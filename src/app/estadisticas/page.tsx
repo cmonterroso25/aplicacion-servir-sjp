@@ -139,6 +139,8 @@ const META_AFILIADOS_TOTAL_TEMPLARIO = META_COORDINADORES_POR_TEMPLARIO * META_A
 const ROLES_SIN_ACCESO = ['lider', 'colaborador', 'templario']
 const ROLES_LEGALES = ['admin', 'pentagono']
 
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
 // ──────────────────────────────────────────────────────────────
 // Normalización de nombres (compartida entre Por sector, Por templario, Estructura y Fiscales)
 // ──────────────────────────────────────────────────────────────
@@ -338,6 +340,8 @@ export default function EstadisticasPage() {
   const [reunionesReporteSeleccionadas, setReunionesReporteSeleccionadas] = useState<Set<number>>(new Set())
   const [asistenciasReporte, setAsistenciasReporte] = useState<Record<number, Set<number>>>({})
   const [cargandoReunionReporte, setCargandoReunionReporte] = useState<number | null>(null)
+  const [filtroMesActividades, setFiltroMesActividades] = useState<number | ''>(new Date().getMonth() + 1)
+  const [filtroAnioActividades, setFiltroAnioActividades] = useState<number | ''>(new Date().getFullYear())
 
   // ── Fiscales ────────────────────────────────────────────────
   const [statsFiscales, setStatsFiscales] = useState<EstadisticaFiscalTemplario[]>([])
@@ -709,6 +713,21 @@ export default function EstadisticasPage() {
     () => reunionesReporte.filter((r) => reunionesReporteSeleccionadas.has(r.id)),
     [reunionesReporte, reunionesReporteSeleccionadas]
   )
+
+  const aniosDisponiblesActividades = useMemo(() => {
+    const anios = new Set(reunionesReporte.map((r) => Number(r.fecha.split('-')[0])))
+    anios.add(new Date().getFullYear())
+    return Array.from(anios).sort((a, b) => b - a)
+  }, [reunionesReporte])
+
+  const reunionesReporteFiltradas = useMemo(() => {
+    return reunionesReporte.filter((r) => {
+      const [anio, mes] = r.fecha.split('-').map(Number)
+      if (filtroAnioActividades !== '' && anio !== filtroAnioActividades) return false
+      if (filtroMesActividades !== '' && mes !== filtroMesActividades) return false
+      return true
+    })
+  }, [reunionesReporte, filtroAnioActividades, filtroMesActividades])
 
   const abrirCompromiso = (c: EstructuraCoordinador) => {
     setCompromisosAbierto((prev) => (prev === c.id ? null : c.id))
@@ -2053,13 +2072,38 @@ export default function EstadisticasPage() {
                 <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--texto-secundario)' }}>
                   Actividades a mostrar
                 </p>
+                <div className="flex gap-2">
+                  <select
+                    value={filtroMesActividades}
+                    onChange={(e) => setFiltroMesActividades(e.target.value ? Number(e.target.value) : '')}
+                    className="flex-1 text-sm px-3 py-2 rounded-lg border"
+                    style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-principal)' }}
+                  >
+                    <option value="">Todos los meses</option>
+                    {MESES.map((m, i) => (
+                      <option key={m} value={i + 1}>{m}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={filtroAnioActividades}
+                    onChange={(e) => setFiltroAnioActividades(e.target.value ? Number(e.target.value) : '')}
+                    className="flex-1 text-sm px-3 py-2 rounded-lg border"
+                    style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-principal)' }}
+                  >
+                    <option value="">Todos los años</option>
+                    {aniosDisponiblesActividades.map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                </div>
+
                 {loadingReporteAsistencia ? (
                   <p className="text-sm" style={{ color: 'var(--texto-secundario)' }}>Cargando reuniones...</p>
-                ) : reunionesReporte.length === 0 ? (
-                  <p className="text-sm italic" style={{ color: 'var(--texto-secundario)' }}>No hay reuniones registradas.</p>
+                ) : reunionesReporteFiltradas.length === 0 ? (
+                  <p className="text-sm italic" style={{ color: 'var(--texto-secundario)' }}>No hay reuniones registradas para ese mes/año.</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {reunionesReporte.map((r) => {
+                    {reunionesReporteFiltradas.map((r) => {
                       const seleccionada = reunionesReporteSeleccionadas.has(r.id)
                       return (
                         <button
