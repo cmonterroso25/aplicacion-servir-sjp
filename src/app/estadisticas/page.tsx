@@ -387,12 +387,18 @@ export default function EstadisticasPage() {
 
   const cargarReunionesAsistencia = async () => {
     try {
+      const ahora = new Date()
+      const inicioMes = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-01`
+      const finMesDate = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0)
+      const finMes = `${finMesDate.getFullYear()}-${String(finMesDate.getMonth() + 1).padStart(2, '0')}-${String(finMesDate.getDate()).padStart(2, '0')}`
+
       const { data, error } = await supabase
         .from('reuniones')
         .select('id, titulo, fecha, hora_inicio')
+        .gte('fecha', inicioMes)
+        .lte('fecha', finMes)
         .order('fecha', { ascending: false })
         .order('hora_inicio', { ascending: false })
-        .limit(200)
       if (error) throw error
       setReunionesAsistencia(data || [])
     } catch (e) {
