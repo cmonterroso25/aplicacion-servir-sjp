@@ -102,6 +102,13 @@ type EstructuraCoordinador = {
   afiliados: EstructuraAfiliado[]
 }
 
+type ReunionOption = {
+  id: number
+  titulo: string
+  fecha: string
+  hora_inicio: string
+}
+
 type ResumenTemplario = {
   nombre: string
   coordinadores: number
@@ -229,6 +236,7 @@ function AfiliadoDetalleCard({
   es_fiscal,
   rol,
   ubicacion,
+  asistencia,
 }: {
   nombre: string
   telefono: string | null
@@ -237,20 +245,41 @@ function AfiliadoDetalleCard({
   es_fiscal?: boolean | null
   rol?: string
   ubicacion?: string
+  asistencia?: {
+    presente: boolean
+    guardando: boolean
+    onToggle: () => void
+  }
 }) {
   return (
-    <div className="px-3 py-2 rounded-lg space-y-1" style={{ background: '#f8fafc' }}>
-      <span className="text-xs font-semibold block" style={{ color: 'var(--texto-principal)' }}>{nombre}</span>
-      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]" style={{ color: 'var(--texto-secundario)' }}>
-        <span>{telefono || 'Sin telefono'}</span>
-        <span>{sector}</span>
-        {ubicacion && <span>{ubicacion}</span>}
-        {rol && <span>{rol}</span>}
-        {typeof es_fiscal === 'boolean' && <span>{es_fiscal ? 'Fiscal: Sí' : 'Fiscal: No'}</span>}
-        <span style={{ color: vota_en_pinula ? '#166534' : '#9b1c3a', fontWeight: 500 }}>
-          {vota_en_pinula ? 'Vota en Pinula' : 'No vota en Pinula'}
-        </span>
+    <div className="px-3 py-2 rounded-lg flex items-center justify-between gap-2" style={{ background: '#f8fafc' }}>
+      <div className="min-w-0 flex-1 space-y-1">
+        <span className="text-xs font-semibold block" style={{ color: 'var(--texto-principal)' }}>{nombre}</span>
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]" style={{ color: 'var(--texto-secundario)' }}>
+          <span>{telefono || 'Sin telefono'}</span>
+          <span>{sector}</span>
+          {ubicacion && <span>{ubicacion}</span>}
+          {rol && <span>{rol}</span>}
+          {typeof es_fiscal === 'boolean' && <span>{es_fiscal ? 'Fiscal: Sí' : 'Fiscal: No'}</span>}
+          <span style={{ color: vota_en_pinula ? '#166534' : '#9b1c3a', fontWeight: 500 }}>
+            {vota_en_pinula ? 'Vota en Pinula' : 'No vota en Pinula'}
+          </span>
+        </div>
       </div>
+      {asistencia && (
+        <button
+          type="button"
+          onClick={asistencia.onToggle}
+          disabled={asistencia.guardando}
+          className="flex-shrink-0 w-10 h-10 rounded-lg border-2 flex items-center justify-center font-bold text-base disabled:opacity-50 transition-colors"
+          style={asistencia.presente
+            ? { background: '#166534', borderColor: '#166534', color: 'white' }
+            : { background: 'white', borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}
+          title={asistencia.presente ? 'Presente — toca para desmarcar' : 'Marcar presente'}
+        >
+          {asistencia.guardando ? '…' : asistencia.presente ? '✓' : ''}
+        </button>
+      )}
     </div>
   )
 }
@@ -293,6 +322,14 @@ export default function EstadisticasPage() {
   const [compromisosAbierto, setCompromisosAbierto] = useState<number | null>(null)
   const [compromisoDraft, setCompromisoDraft] = useState('')
   const [guardandoCompromiso, setGuardandoCompromiso] = useState(false)
+
+  // ── Asistencia a reuniones ───────────────────────────────────
+  const [reunionesAsistencia, setReunionesAsistencia] = useState<ReunionOption[]>([])
+  const [reunionesCargadas, setReunionesCargadas] = useState(false)
+  const [reunionAsistenciaId, setReunionAsistenciaId] = useState<number | ''>('')
+  const [afiliadosPresentes, setAfiliadosPresentes] = useState<Set<number>>(new Set())
+  const [loadingAsistencia, setLoadingAsistencia] = useState(false)
+  const [guardandoAsistenciaId, setGuardandoAsistenciaId] = useState<number | null>(null)
 
   // ── Fiscales ────────────────────────────────────────────────
   const [statsFiscales, setStatsFiscales] = useState<EstadisticaFiscalTemplario[]>([])
@@ -341,6 +378,81 @@ export default function EstadisticasPage() {
       setEstructuraDataCargada(true)
       setLoadingEstructura(true)
       cargarEstructura()
+    }
+    if (!reunionesCargadas) {
+      setReunionesCargadas(true)
+      cargarReunionesAsistencia()
+    }
+  }
+
+  const cargarReunionesAsistencia = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('reuniones')
+        .select('id, titulo, fecha, hora_inicio')
+        .order('fecha', { ascending: false })
+        .order('hora_inicio', { ascending: false })
+        .limit(200)
+      if (error) throw error
+      setReunionesAsistencia(data || [])
+    } catch (e) {
+      console.error('Error cargando reuniones para asistencia:', e)
+    }
+  }
+
+  const seleccionarReunionAsistencia = async (reunionId: number | '') => {
+    setReunionAsistenciaId(reunionId)
+    setAfiliadosPresentes(new Set())
+    if (!reunionId) return
+    setLoadingAsistencia(true)
+    try {
+      const { data, error } = await supabase
+        .from('asistencias')
+        .select('afiliado_id')
+        .eq('reunion_id', reunionId)
+      if (error) throw error
+      setAfiliadosPresentes(new Set((data || []).map((r) => r.afiliado_id as number)))
+    } catch (e) {
+      console.error('Error cargando asistencia de la reunión:', e)
+    } finally {
+      setLoadingAsistencia(false)
+    }
+  }
+
+  const formatFechaCorta = (fecha: string) => {
+    const [y, m, d] = fecha.split('-')
+    return `${d}/${m}/${y}`
+  }
+
+  const toggleAsistencia = async (afiliadoId: number) => {
+    if (!reunionAsistenciaId || !perfil) return
+    const yaPresente = afiliadosPresentes.has(afiliadoId)
+    setGuardandoAsistenciaId(afiliadoId)
+    try {
+      if (yaPresente) {
+        const { error } = await supabase
+          .from('asistencias')
+          .delete()
+          .eq('reunion_id', reunionAsistenciaId)
+          .eq('afiliado_id', afiliadoId)
+        if (error) throw error
+        setAfiliadosPresentes((prev) => {
+          const next = new Set(prev)
+          next.delete(afiliadoId)
+          return next
+        })
+      } else {
+        const { error } = await supabase
+          .from('asistencias')
+          .insert({ reunion_id: reunionAsistenciaId, afiliado_id: afiliadoId, registrado_por: perfil.id })
+        if (error) throw error
+        setAfiliadosPresentes((prev) => new Set(prev).add(afiliadoId))
+      }
+    } catch (e) {
+      console.error('Error actualizando asistencia:', e)
+      alert('Error al actualizar asistencia. Intenta de nuevo.')
+    } finally {
+      setGuardandoAsistenciaId(null)
     }
   }
 
@@ -1532,6 +1644,30 @@ export default function EstadisticasPage() {
                   <option key={t.id} value={t.nombre}>{t.nombre}</option>
                 ))}
               </select>
+
+              <div className="pt-2 border-t space-y-2" style={{ borderColor: 'var(--color-borde)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--texto-secundario)' }}>
+                  Tomar asistencia
+                </p>
+                <select
+                  value={reunionAsistenciaId}
+                  onChange={(e) => seleccionarReunionAsistencia(e.target.value ? Number(e.target.value) : '')}
+                  className="w-full text-sm px-3 py-2 rounded-lg border"
+                  style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-principal)' }}
+                >
+                  <option value="">Selecciona una reunión para pasar lista</option>
+                  {reunionesAsistencia.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.titulo} — {formatFechaCorta(r.fecha)} {r.hora_inicio?.slice(0, 5)}
+                    </option>
+                  ))}
+                </select>
+                {reunionAsistenciaId && (
+                  <p className="text-xs" style={{ color: 'var(--texto-secundario)' }}>
+                    {loadingAsistencia ? 'Cargando asistencia...' : `${afiliadosPresentes.size} presente${afiliadosPresentes.size !== 1 ? 's' : ''} registrados en esta reunión`}
+                  </p>
+                )}
+              </div>
             </div>
 
             {loadingEstructura ? (
@@ -1605,6 +1741,26 @@ export default function EstadisticasPage() {
                             </div>
                           </button>
 
+                          {reunionAsistenciaId && (
+                            <div className="mt-3 flex items-center justify-between gap-2 px-1">
+                              <span className="text-xs font-medium" style={{ color: 'var(--texto-secundario)' }}>
+                                Asistencia del coordinador
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => toggleAsistencia(c.id)}
+                                disabled={guardandoAsistenciaId === c.id}
+                                className="flex-shrink-0 w-10 h-10 rounded-lg border-2 flex items-center justify-center font-bold text-base disabled:opacity-50 transition-colors"
+                                style={afiliadosPresentes.has(c.id)
+                                  ? { background: '#166534', borderColor: '#166534', color: 'white' }
+                                  : { background: 'white', borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}
+                                title={afiliadosPresentes.has(c.id) ? 'Presente — toca para desmarcar' : 'Marcar presente'}
+                              >
+                                {guardandoAsistenciaId === c.id ? '…' : afiliadosPresentes.has(c.id) ? '✓' : ''}
+                              </button>
+                            </div>
+                          )}
+
                           <div className="mt-3">
                             <button
                               type="button"
@@ -1668,6 +1824,11 @@ export default function EstadisticasPage() {
                                     es_fiscal={a.es_fiscal}
                                     rol={a.rol}
                                     ubicacion={a.ubicacion}
+                                    asistencia={reunionAsistenciaId ? {
+                                      presente: afiliadosPresentes.has(a.id),
+                                      guardando: guardandoAsistenciaId === a.id,
+                                      onToggle: () => toggleAsistencia(a.id),
+                                    } : undefined}
                                   />
                                 ))
                               )}
