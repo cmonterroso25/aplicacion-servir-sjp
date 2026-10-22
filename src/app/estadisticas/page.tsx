@@ -287,7 +287,7 @@ function AfiliadoDetalleCard({
 export default function EstadisticasPage() {
   const router = useRouter()
   const [perfil, setPerfil] = useState<Perfil | null>(null)
-  const [vista, setVista] = useState<'sector' | 'templario' | 'estructura' | 'fiscales'>('sector')
+  const [vista, setVista] = useState<'sector' | 'templario' | 'estructura' | 'fiscales' | 'asistencia'>('sector')
 
   // ── Por sector ──────────────────────────────────────────────
   const [estadisticas, setEstadisticas] = useState<EstadisticaSector[]>([])
@@ -330,6 +330,14 @@ export default function EstadisticasPage() {
   const [afiliadosPresentes, setAfiliadosPresentes] = useState<Set<number>>(new Set())
   const [loadingAsistencia, setLoadingAsistencia] = useState(false)
   const [guardandoAsistenciaId, setGuardandoAsistenciaId] = useState<number | null>(null)
+
+  // ── Reporte de asistencia (tabla por templario) ──────────────
+  const [reporteAsistenciaDataCargada, setReporteAsistenciaDataCargada] = useState(false)
+  const [loadingReporteAsistencia, setLoadingReporteAsistencia] = useState(false)
+  const [reunionesReporte, setReunionesReporte] = useState<ReunionOption[]>([])
+  const [reunionesReporteSeleccionadas, setReunionesReporteSeleccionadas] = useState<Set<number>>(new Set())
+  const [asistenciasReporte, setAsistenciasReporte] = useState<Record<number, Set<number>>>({})
+  const [cargandoReunionReporte, setCargandoReunionReporte] = useState<number | null>(null)
 
   // ── Fiscales ────────────────────────────────────────────────
   const [statsFiscales, setStatsFiscales] = useState<EstadisticaFiscalTemplario[]>([])
@@ -468,6 +476,66 @@ export default function EstadisticasPage() {
       setFiscalesDataCargada(true)
       setLoadingFiscales(true)
       cargarStatsFiscales()
+    }
+  }
+
+  const seleccionarVistaReporteAsistencia = () => {
+    setVista('asistencia')
+    if (!estructuraDataCargada) {
+      setEstructuraDataCargada(true)
+      setLoadingEstructura(true)
+      cargarEstructura()
+    }
+    if (!reporteAsistenciaDataCargada) {
+      setReporteAsistenciaDataCargada(true)
+      cargarReunionesReporte()
+    }
+  }
+
+  const cargarReunionesReporte = async () => {
+    setLoadingReporteAsistencia(true)
+    try {
+      const { data, error } = await supabase
+        .from('reuniones')
+        .select('id, titulo, fecha, hora_inicio')
+        .order('fecha', { ascending: false })
+        .order('hora_inicio', { ascending: false })
+      if (error) throw error
+      setReunionesReporte(data || [])
+    } catch (e) {
+      console.error('Error cargando reuniones del reporte:', e)
+    } finally {
+      setLoadingReporteAsistencia(false)
+    }
+  }
+
+  const toggleReunionReporte = async (reunionId: number) => {
+    const yaSeleccionada = reunionesReporteSeleccionadas.has(reunionId)
+    if (yaSeleccionada) {
+      setReunionesReporteSeleccionadas((prev) => {
+        const next = new Set(prev)
+        next.delete(reunionId)
+        return next
+      })
+      return
+    }
+    setReunionesReporteSeleccionadas((prev) => new Set(prev).add(reunionId))
+    if (asistenciasReporte[reunionId]) return
+    setCargandoReunionReporte(reunionId)
+    try {
+      const { data, error } = await supabase
+        .from('asistencias')
+        .select('afiliado_id')
+        .eq('reunion_id', reunionId)
+      if (error) throw error
+      setAsistenciasReporte((prev) => ({
+        ...prev,
+        [reunionId]: new Set((data || []).map((r) => r.afiliado_id as number)),
+      }))
+    } catch (e) {
+      console.error('Error cargando asistencia para el reporte:', e)
+    } finally {
+      setCargandoReunionReporte(null)
     }
   }
 
@@ -623,6 +691,24 @@ export default function EstadisticasPage() {
   }, [templarioSeleccionado, afiliadosEstructura])
 
   const totalAfiliadosEstructura = coordinadoresDelTemplario.reduce((s, c) => s + c.afiliados.length, 0)
+
+  type FilaReporteAsistencia = { id: number; nombre: string; rol: string; coordinador: string | null }
+
+  const filasReporteAsistencia = useMemo<FilaReporteAsistencia[]>(() => {
+    const filas: FilaReporteAsistencia[] = []
+    coordinadoresDelTemplario.forEach((c) => {
+      filas.push({ id: c.id, nombre: c.nombre, rol: 'Coordinador', coordinador: null })
+      c.afiliados.forEach((a) => {
+        filas.push({ id: a.id, nombre: a.nombre, rol: a.rol || 'Simpatizante', coordinador: c.nombre })
+      })
+    })
+    return filas
+  }, [coordinadoresDelTemplario])
+
+  const reunionesReporteOrdenadas = useMemo(
+    () => reunionesReporte.filter((r) => reunionesReporteSeleccionadas.has(r.id)),
+    [reunionesReporte, reunionesReporteSeleccionadas]
+  )
 
   const abrirCompromiso = (c: EstructuraCoordinador) => {
     setCompromisosAbierto((prev) => (prev === c.id ? null : c.id))
@@ -1165,6 +1251,14 @@ export default function EstadisticasPage() {
                 ? { background: '#004466', color: 'white', borderColor: '#004466' }
                 : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
               Estructura
+            </button>
+            <button
+              onClick={seleccionarVistaReporteAsistencia}
+              className="text-sm px-4 py-2 rounded-lg border font-medium transition-all"
+              style={vista === 'asistencia'
+                ? { background: '#004466', color: 'white', borderColor: '#004466' }
+                : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
+              Asistencia
             </button>
             <button
               onClick={seleccionarVistaFiscales}
@@ -1925,6 +2019,122 @@ export default function EstadisticasPage() {
                     label="Afiliados asignados (meta ideal)"
                   />
                 </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {vista === 'asistencia' && mostrarTemplarioTab && (
+          <>
+            <div className="card space-y-3">
+              <div>
+                <h2 className="font-semibold text-base mb-1" style={{ color: 'var(--texto-principal)' }}>Asistencia</h2>
+                <p className="text-sm" style={{ color: 'var(--texto-secundario)' }}>
+                  Tabla de asistencia de coordinadores y afiliados, por templario.
+                </p>
+              </div>
+
+              <select
+                value={templarioSeleccionado}
+                onChange={(e) => setTemplarioSeleccionado(e.target.value)}
+                className="w-full text-sm px-3 py-2 rounded-lg border"
+                style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-principal)' }}
+                disabled={loadingEstructura}
+              >
+                <option value="">
+                  {loadingEstructura ? 'Cargando templarios...' : 'Selecciona un templario'}
+                </option>
+                {templarios.map((t) => (
+                  <option key={t.id} value={t.nombre}>{t.nombre}</option>
+                ))}
+              </select>
+
+              <div className="pt-2 border-t space-y-2" style={{ borderColor: 'var(--color-borde)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--texto-secundario)' }}>
+                  Actividades a mostrar
+                </p>
+                {loadingReporteAsistencia ? (
+                  <p className="text-sm" style={{ color: 'var(--texto-secundario)' }}>Cargando reuniones...</p>
+                ) : reunionesReporte.length === 0 ? (
+                  <p className="text-sm italic" style={{ color: 'var(--texto-secundario)' }}>No hay reuniones registradas.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {reunionesReporte.map((r) => {
+                      const seleccionada = reunionesReporteSeleccionadas.has(r.id)
+                      return (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => toggleReunionReporte(r.id)}
+                          disabled={cargandoReunionReporte === r.id}
+                          className="text-xs px-3 py-1.5 rounded-lg border font-medium transition-all disabled:opacity-50"
+                          style={seleccionada
+                            ? { background: '#004466', color: 'white', borderColor: '#004466' }
+                            : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
+                          {seleccionada ? '✓ ' : ''}{r.titulo} — {formatFechaCorta(r.fecha)}
+                          {cargandoReunionReporte === r.id ? '…' : ''}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {!templarioSeleccionado ? (
+              <div className="card text-center py-10">
+                <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>Selecciona un templario</p>
+                <p className="text-sm mt-1" style={{ color: 'var(--texto-secundario)' }}>Para ver la tabla de asistencia de su estructura.</p>
+              </div>
+            ) : filasReporteAsistencia.length === 0 ? (
+              <div className="card text-center py-10">
+                <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>Sin coordinadores</p>
+                <p className="text-sm mt-1" style={{ color: 'var(--texto-secundario)' }}>Este templario todavia no tiene afiliados con rol Coordinador.</p>
+              </div>
+            ) : (
+              <div className="card overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b" style={{ borderColor: 'var(--color-borde)' }}>
+                      <th className="text-left py-2 px-2 whitespace-nowrap" style={{ color: 'var(--texto-principal)' }}>Nombre</th>
+                      <th className="text-left py-2 px-2 whitespace-nowrap" style={{ color: 'var(--texto-principal)' }}>Rol</th>
+                      <th className="text-left py-2 px-2 whitespace-nowrap" style={{ color: 'var(--texto-principal)' }}>Coordinador</th>
+                      {reunionesReporteOrdenadas.map((r) => (
+                        <th key={r.id} className="text-center py-2 px-2 whitespace-nowrap" style={{ color: 'var(--texto-principal)' }}>
+                          {r.titulo}<br />
+                          <span className="font-normal" style={{ color: 'var(--texto-secundario)' }}>{formatFechaCorta(r.fecha)}</span>
+                        </th>
+                      ))}
+                      {reunionesReporteOrdenadas.length > 0 && (
+                        <th className="text-center py-2 px-2 whitespace-nowrap" style={{ color: 'var(--texto-principal)' }}>Total</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filasReporteAsistencia.map((fila) => {
+                      const totalPresente = reunionesReporteOrdenadas.filter((r) => asistenciasReporte[r.id]?.has(fila.id)).length
+                      return (
+                        <tr key={fila.id} className="border-b" style={{ borderColor: 'var(--color-borde)' }}>
+                          <td className="py-2 px-2 font-medium whitespace-nowrap" style={{ color: 'var(--texto-principal)' }}>{fila.nombre}</td>
+                          <td className="py-2 px-2 whitespace-nowrap" style={{ color: 'var(--texto-secundario)' }}>{fila.rol}</td>
+                          <td className="py-2 px-2 whitespace-nowrap" style={{ color: 'var(--texto-secundario)' }}>{fila.coordinador || '—'}</td>
+                          {reunionesReporteOrdenadas.map((r) => (
+                            <td key={r.id} className="text-center py-2 px-2">
+                              {asistenciasReporte[r.id]?.has(fila.id)
+                                ? <span style={{ color: '#166534', fontWeight: 600 }}>✓</span>
+                                : <span style={{ color: '#9ca3af' }}>—</span>}
+                            </td>
+                          ))}
+                          {reunionesReporteOrdenadas.length > 0 && (
+                            <td className="text-center py-2 px-2 font-semibold" style={{ color: 'var(--texto-principal)' }}>
+                              {totalPresente}/{reunionesReporteOrdenadas.length}
+                            </td>
+                          )}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </>
