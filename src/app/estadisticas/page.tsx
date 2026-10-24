@@ -663,8 +663,34 @@ export default function EstadisticasPage() {
 
   const totalAfiliadosEstructura = coordinadoresDelTemplario.reduce((s, c) => s + c.afiliados.length, 0)
 
-  // Total de asistentes (coordinadores + afiliados) del templario seleccionado,
-  // para la reunión activa de marcado en la pestaña Asistencia.
+  // Afiliados del templario seleccionado que aún no tienen coordinador
+  // asignado (coordinador_id null). El árbol por coordinador los excluye por
+  // completo, así que sin esto su asistencia se guarda bien pero queda
+  // invisible en las vistas agrupadas.
+  const afiliadosSinCoordinadorDelTemplario = useMemo<EstructuraAfiliado[]>(() => {
+    if (!templarioSeleccionado) return []
+    const key = claveFinal(templarioSeleccionado)
+    return afiliadosEstructura
+      .filter((a) => {
+        const rolNorm = normalizarClave(a.rol_afiliado || '')
+        const apNorm = claveFinal(a.afiliado_por || '')
+        return apNorm === key && a.coordinador_id == null && rolNorm !== 'coordinador'
+      })
+      .map((a) => ({
+        id: a.id,
+        nombre: nombreCompletoAfiliado(a),
+        telefono: a.telefono,
+        sector: a.sectores?.nombre || 'Sin sector',
+        rol: a.rol_afiliado || 'Simpatizante',
+        ubicacion: a.nombre_ubicacion || 'Sin ubicación',
+        vota_en_pinula: a.vota_en_pinula,
+        es_fiscal: a.es_fiscal,
+      }))
+  }, [templarioSeleccionado, afiliadosEstructura])
+
+  // Total de asistentes (coordinadores + afiliados, incluidos los sin
+  // coordinador) del templario seleccionado, para la reunión activa de
+  // marcado en la pestaña Asistencia.
   const totalAsistentesTemplario = useMemo(() => {
     const reunionId = reunionesReporteSeleccionadas.size === 1 ? Array.from(reunionesReporteSeleccionadas)[0] : null
     if (!reunionId) return 0
@@ -675,8 +701,9 @@ export default function EstadisticasPage() {
       if (presentes.has(c.id)) total++
       c.afiliados.forEach((a) => { if (presentes.has(a.id)) total++ })
     })
+    afiliadosSinCoordinadorDelTemplario.forEach((a) => { if (presentes.has(a.id)) total++ })
     return total
-  }, [coordinadoresDelTemplario, asistenciasReporte, reunionesReporteSeleccionadas])
+  }, [coordinadoresDelTemplario, afiliadosSinCoordinadorDelTemplario, asistenciasReporte, reunionesReporteSeleccionadas])
 
   type FilaReporteAsistencia = { id: number; nombre: string; rol: string; coordinador: string | null }
 
@@ -688,8 +715,11 @@ export default function EstadisticasPage() {
         filas.push({ id: a.id, nombre: a.nombre, rol: a.rol || 'Simpatizante', coordinador: c.nombre })
       })
     })
+    afiliadosSinCoordinadorDelTemplario.forEach((a) => {
+      filas.push({ id: a.id, nombre: a.nombre, rol: a.rol || 'Simpatizante', coordinador: 'Sin coordinador' })
+    })
     return filas
-  }, [coordinadoresDelTemplario])
+  }, [coordinadoresDelTemplario, afiliadosSinCoordinadorDelTemplario])
 
   const reunionesReporteOrdenadas = useMemo(
     () => reunionesReporte.filter((r) => reunionesReporteSeleccionadas.has(r.id)),
@@ -2289,6 +2319,31 @@ export default function EstadisticasPage() {
                     onToggle: toggleAsistencia,
                   } : undefined,
                 })}
+
+                {afiliadosSinCoordinadorDelTemplario.length > 0 && (
+                  <div className="card space-y-1.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--texto-secundario)' }}>
+                      Sin coordinador asignado ({afiliadosSinCoordinadorDelTemplario.length})
+                    </p>
+                    {afiliadosSinCoordinadorDelTemplario.map((a) => (
+                      <AfiliadoDetalleCard
+                        key={a.id}
+                        nombre={a.nombre}
+                        telefono={a.telefono}
+                        sector={a.sector}
+                        vota_en_pinula={a.vota_en_pinula}
+                        es_fiscal={a.es_fiscal}
+                        rol={a.rol}
+                        ubicacion={a.ubicacion}
+                        asistencia={reunionActivaParaMarcar ? {
+                          presente: (asistenciasReporte[reunionActivaParaMarcar] || new Set()).has(a.id),
+                          guardando: guardandoAsistenciaId === a.id,
+                          onToggle: () => toggleAsistencia(a.id),
+                        } : undefined}
+                      />
+                    ))}
+                  </div>
+                )}
               </>
             ) : filasReporteAsistencia.length === 0 ? (
               <div className="card text-center py-10">
