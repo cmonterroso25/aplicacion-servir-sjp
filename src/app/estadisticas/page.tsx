@@ -355,6 +355,11 @@ export default function EstadisticasPage() {
       if (p) {
         if (ROLES_SIN_ACCESO.includes(p.rol)) { router.replace('/afiliados'); return }
         setPerfil(p)
+        if (p.rol === 'pentagono') {
+          // Pentágono solo puede ver su propia estructura (reforzado por RLS
+          // en afiliados). No tiene sentido mostrarle el selector de templario.
+          setTemplarioSeleccionado(p.nombre_completo || p.email || '')
+        }
         await cargarEstadisticas(p.rol, session.user.id)
 
         if (ROLES_LEGALES.includes(p.rol)) {
@@ -369,6 +374,7 @@ export default function EstadisticasPage() {
   }, [router])
 
   const mostrarTemplarioTab = !!perfil && ROLES_LEGALES.includes(perfil.rol)
+  const esAdmin = perfil?.rol === 'admin'
 
   const seleccionarVistaTemplario = () => {
     setVista('templario')
@@ -1935,20 +1941,26 @@ export default function EstadisticasPage() {
                 </button>
               </div>
 
-              <select
-                value={templarioSeleccionado}
-                onChange={(e) => { setTemplarioSeleccionado(e.target.value); setExpandidoCoordinador(null) }}
-                className="w-full text-sm px-3 py-2 rounded-lg border"
-                style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-principal)' }}
-                disabled={loadingEstructura}
-              >
-                <option value="">
-                  {loadingEstructura ? 'Cargando templarios...' : 'Selecciona un templario'}
-                </option>
-                {templarios.map((t) => (
-                  <option key={t.id} value={t.nombre}>{t.nombre}</option>
-                ))}
-              </select>
+              {esAdmin ? (
+                <select
+                  value={templarioSeleccionado}
+                  onChange={(e) => { setTemplarioSeleccionado(e.target.value); setExpandidoCoordinador(null) }}
+                  className="w-full text-sm px-3 py-2 rounded-lg border"
+                  style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-principal)' }}
+                  disabled={loadingEstructura}
+                >
+                  <option value="">
+                    {loadingEstructura ? 'Cargando templarios...' : 'Selecciona un templario'}
+                  </option>
+                  {templarios.map((t) => (
+                    <option key={t.id} value={t.nombre}>{t.nombre}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-sm px-3 py-2 rounded-lg border" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                  Tu estructura: <span style={{ color: 'var(--texto-principal)', fontWeight: 600 }}>{templarioSeleccionado}</span>
+                </p>
+              )}
             </div>
 
             {loadingEstructura ? (
@@ -2072,20 +2084,26 @@ export default function EstadisticasPage() {
                 </p>
               </div>
 
-              <select
-                value={templarioSeleccionado}
-                onChange={(e) => setTemplarioSeleccionado(e.target.value)}
-                className="w-full text-sm px-3 py-2 rounded-lg border"
-                style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-principal)' }}
-                disabled={loadingEstructura}
-              >
-                <option value="">
-                  {loadingEstructura ? 'Cargando templarios...' : 'Selecciona un templario'}
-                </option>
-                {templarios.map((t) => (
-                  <option key={t.id} value={t.nombre}>{t.nombre}</option>
-                ))}
-              </select>
+              {esAdmin ? (
+                <select
+                  value={templarioSeleccionado}
+                  onChange={(e) => setTemplarioSeleccionado(e.target.value)}
+                  className="w-full text-sm px-3 py-2 rounded-lg border"
+                  style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-principal)' }}
+                  disabled={loadingEstructura}
+                >
+                  <option value="">
+                    {loadingEstructura ? 'Cargando templarios...' : 'Selecciona un templario'}
+                  </option>
+                  {templarios.map((t) => (
+                    <option key={t.id} value={t.nombre}>{t.nombre}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-sm px-3 py-2 rounded-lg border" style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                  Tu estructura: <span style={{ color: 'var(--texto-principal)', fontWeight: 600 }}>{templarioSeleccionado}</span>
+                </p>
+              )}
 
               <div className="pt-2 border-t space-y-2" style={{ borderColor: 'var(--color-borde)' }}>
                 <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--texto-secundario)' }}>
