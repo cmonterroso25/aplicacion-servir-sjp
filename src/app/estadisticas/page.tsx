@@ -73,6 +73,7 @@ type RawAfiliadoEstructura = {
   segundo_nombre: string | null
   primer_apellido: string | null
   segundo_apellido: string | null
+  dpi: string | null
   rol_afiliado: string | null
   afiliado_por: string | null
   coordinador_id: number | null
@@ -325,23 +326,18 @@ export default function EstadisticasPage() {
   const [compromisoDraft, setCompromisoDraft] = useState('')
   const [guardandoCompromiso, setGuardandoCompromiso] = useState(false)
 
-  // ── Asistencia a reuniones ───────────────────────────────────
-  const [reunionesAsistencia, setReunionesAsistencia] = useState<ReunionOption[]>([])
-  const [reunionesCargadas, setReunionesCargadas] = useState(false)
-  const [reunionAsistenciaId, setReunionAsistenciaId] = useState<number | ''>('')
-  const [afiliadosPresentes, setAfiliadosPresentes] = useState<Set<number>>(new Set())
-  const [loadingAsistencia, setLoadingAsistencia] = useState(false)
-  const [guardandoAsistenciaId, setGuardandoAsistenciaId] = useState<number | null>(null)
-
-  // ── Reporte de asistencia (tabla por templario) ──────────────
+  // ── Reporte / marcado de asistencia (pestaña Asistencia) ─────
   const [reporteAsistenciaDataCargada, setReporteAsistenciaDataCargada] = useState(false)
   const [loadingReporteAsistencia, setLoadingReporteAsistencia] = useState(false)
   const [reunionesReporte, setReunionesReporte] = useState<ReunionOption[]>([])
   const [reunionesReporteSeleccionadas, setReunionesReporteSeleccionadas] = useState<Set<number>>(new Set())
   const [asistenciasReporte, setAsistenciasReporte] = useState<Record<number, Set<number>>>({})
   const [cargandoReunionReporte, setCargandoReunionReporte] = useState<number | null>(null)
+  const [guardandoAsistenciaId, setGuardandoAsistenciaId] = useState<number | null>(null)
   const [filtroMesActividades, setFiltroMesActividades] = useState<number | ''>(new Date().getMonth() + 1)
   const [filtroAnioActividades, setFiltroAnioActividades] = useState<number | ''>(new Date().getFullYear())
+  const [busquedaAfiliadosAsistencia, setBusquedaAfiliadosAsistencia] = useState('')
+  const [paginaAfiliadosAsistencia, setPaginaAfiliadosAsistencia] = useState(1)
 
   // ── Fiscales ────────────────────────────────────────────────
   const [statsFiscales, setStatsFiscales] = useState<EstadisticaFiscalTemplario[]>([])
@@ -391,50 +387,6 @@ export default function EstadisticasPage() {
       setLoadingEstructura(true)
       cargarEstructura()
     }
-    if (!reunionesCargadas) {
-      setReunionesCargadas(true)
-      cargarReunionesAsistencia()
-    }
-  }
-
-  const cargarReunionesAsistencia = async () => {
-    try {
-      const ahora = new Date()
-      const inicioMes = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-01`
-      const finMesDate = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0)
-      const finMes = `${finMesDate.getFullYear()}-${String(finMesDate.getMonth() + 1).padStart(2, '0')}-${String(finMesDate.getDate()).padStart(2, '0')}`
-
-      const { data, error } = await supabase
-        .from('reuniones')
-        .select('id, titulo, fecha, hora_inicio')
-        .gte('fecha', inicioMes)
-        .lte('fecha', finMes)
-        .order('fecha', { ascending: false })
-        .order('hora_inicio', { ascending: false })
-      if (error) throw error
-      setReunionesAsistencia(data || [])
-    } catch (e) {
-      console.error('Error cargando reuniones para asistencia:', e)
-    }
-  }
-
-  const seleccionarReunionAsistencia = async (reunionId: number | '') => {
-    setReunionAsistenciaId(reunionId)
-    setAfiliadosPresentes(new Set())
-    if (!reunionId) return
-    setLoadingAsistencia(true)
-    try {
-      const { data, error } = await supabase
-        .from('asistencias')
-        .select('afiliado_id')
-        .eq('reunion_id', reunionId)
-      if (error) throw error
-      setAfiliadosPresentes(new Set((data || []).map((r) => r.afiliado_id as number)))
-    } catch (e) {
-      console.error('Error cargando asistencia de la reunión:', e)
-    } finally {
-      setLoadingAsistencia(false)
-    }
   }
 
   const formatFechaCorta = (fecha: string) => {
@@ -442,30 +394,38 @@ export default function EstadisticasPage() {
     return `${d}/${m}/${y}`
   }
 
+  // La "reunión activa" para marcar asistencia es la única seleccionada entre
+  // las actividades (si hay 0 o 2+, se usa la tabla comparativa en su lugar).
+  const reunionActivaParaMarcar = reunionesReporteSeleccionadas.size === 1
+    ? Array.from(reunionesReporteSeleccionadas)[0]
+    : null
+
   const toggleAsistencia = async (afiliadoId: number) => {
-    if (!reunionAsistenciaId || !perfil) return
-    const yaPresente = afiliadosPresentes.has(afiliadoId)
+    if (!reunionActivaParaMarcar || !perfil) return
+    const reunionId = reunionActivaParaMarcar
+    const presentesActuales = asistenciasReporte[reunionId] || new Set<number>()
+    const yaPresente = presentesActuales.has(afiliadoId)
     setGuardandoAsistenciaId(afiliadoId)
     try {
       if (yaPresente) {
         const { error } = await supabase
           .from('asistencias')
           .delete()
-          .eq('reunion_id', reunionAsistenciaId)
+          .eq('reunion_id', reunionId)
           .eq('afiliado_id', afiliadoId)
         if (error) throw error
-        setAfiliadosPresentes((prev) => {
-          const next = new Set(prev)
-          next.delete(afiliadoId)
-          return next
-        })
       } else {
         const { error } = await supabase
           .from('asistencias')
-          .insert({ reunion_id: reunionAsistenciaId, afiliado_id: afiliadoId, registrado_por: perfil.id })
+          .insert({ reunion_id: reunionId, afiliado_id: afiliadoId, registrado_por: perfil.id })
         if (error) throw error
-        setAfiliadosPresentes((prev) => new Set(prev).add(afiliadoId))
       }
+      setAsistenciasReporte((prev) => {
+        const next = new Set(prev[reunionId] || [])
+        if (yaPresente) next.delete(afiliadoId)
+        else next.add(afiliadoId)
+        return { ...prev, [reunionId]: next }
+      })
     } catch (e) {
       console.error('Error actualizando asistencia:', e)
       alert('Error al actualizar asistencia. Intenta de nuevo.')
@@ -561,7 +521,7 @@ export default function EstadisticasPage() {
       while (hasMore) {
         const { data: page, error } = await supabase
           .from('afiliados')
-          .select('id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, rol_afiliado, afiliado_por, coordinador_id, telefono, nombre_ubicacion, vota_en_pinula, es_fiscal, compromisos, sectores(nombre)')
+          .select('id, primer_nombre, segundo_nombre, primer_apellido, segundo_apellido, dpi, rol_afiliado, afiliado_por, coordinador_id, telefono, nombre_ubicacion, vota_en_pinula, es_fiscal, compromisos, sectores(nombre)')
           .range(from, from + pageSize - 1)
 
         if (error) throw error
@@ -729,6 +689,30 @@ export default function EstadisticasPage() {
     })
   }, [reunionesReporte, filtroAnioActividades, filtroMesActividades])
 
+  const PAGE_SIZE_AFILIADOS_ASISTENCIA = 50
+
+  const afiliadosAsistenciaFiltrados = useMemo(() => {
+    const qTexto = busquedaAfiliadosAsistencia.trim()
+    if (!qTexto) return afiliadosEstructura
+    const qNombre = normalizarClave(qTexto)
+    const qDpi = qTexto.replace(/\s+/g, '')
+    return afiliadosEstructura.filter((a) =>
+      normalizarClave(nombreCompletoAfiliado(a)).includes(qNombre) ||
+      (a.dpi && a.dpi.replace(/\s+/g, '').includes(qDpi))
+    )
+  }, [afiliadosEstructura, busquedaAfiliadosAsistencia])
+
+  const totalPaginasAfiliadosAsistencia = Math.max(1, Math.ceil(afiliadosAsistenciaFiltrados.length / PAGE_SIZE_AFILIADOS_ASISTENCIA))
+
+  const afiliadosAsistenciaPagina = useMemo(() => {
+    const desde = (paginaAfiliadosAsistencia - 1) * PAGE_SIZE_AFILIADOS_ASISTENCIA
+    return afiliadosAsistenciaFiltrados.slice(desde, desde + PAGE_SIZE_AFILIADOS_ASISTENCIA)
+  }, [afiliadosAsistenciaFiltrados, paginaAfiliadosAsistencia])
+
+  // Buscar por nombre/DPI tiene prioridad: muestra lista plana con el check
+  // de asistencia a la mano, sin necesidad de elegir templario primero.
+  const mostrarListaPlanaAsistencia = !templarioSeleccionado || busquedaAfiliadosAsistencia.trim() !== ''
+
   const abrirCompromiso = (c: EstructuraCoordinador) => {
     setCompromisosAbierto((prev) => (prev === c.id ? null : c.id))
     setCompromisoDraft(c.compromisos || '')
@@ -750,6 +734,163 @@ export default function EstadisticasPage() {
       prev.map((a) => (a.id === coordinadorId ? { ...a, compromisos: valor } : a))
     )
     setCompromisosAbierto(null)
+  }
+
+  // Árbol Coordinador → Afiliados del templario seleccionado. Se reutiliza en
+  // Estructura (sin asistencia) y en Asistencia (con checkbox de presente/ausente
+  // cuando hay exactamente una reunión activa).
+  const renderArbolCoordinadores = (asistenciaActiva?: {
+    presentes: Set<number>
+    guardandoId: number | null
+    onToggle: (afiliadoId: number) => void
+  }) => {
+    if (coordinadoresDelTemplario.length === 0) {
+      return (
+        <div className="card text-center py-10">
+          <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>Sin coordinadores</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--texto-secundario)' }}>
+            Este templario todavia no tiene afiliados con rol Coordinador.
+          </p>
+        </div>
+      )
+    }
+    return (
+      <div className="space-y-3">
+        {coordinadoresDelTemplario.map((c) => {
+          const abierto = expandidoCoordinador === c.id
+          const cumpleMeta = c.afiliados.length >= META_AFILIADOS_POR_COORDINADOR
+          return (
+            <div key={c.id} className="card hover:shadow-md transition-shadow">
+              <button className="w-full text-left" onClick={() => setExpandidoCoordinador(abierto ? null : c.id)}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 text-sm" style={{ background: '#166534' }}>
+                      {c.nombre.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm leading-snug" style={{ color: 'var(--texto-principal)' }}>{c.nombre}</p>
+                      <p className="text-xs mt-0.5" style={{ color: cumpleMeta ? '#166534' : '#b45309' }}>
+                        {cumpleMeta ? 'Cumple la meta' : `Faltan ${META_AFILIADOS_POR_COORDINADOR - c.afiliados.length} para la meta`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="text-right">
+                      <p className="font-bold text-lg leading-none" style={{ color: '#166534' }}>{c.afiliados.length}</p>
+                      <p className="text-xs" style={{ color: 'var(--texto-secundario)' }}>/ {META_AFILIADOS_POR_COORDINADOR}</p>
+                    </div>
+                    <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform ${abierto ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'var(--texto-secundario)' }}>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background: '#dcfce7' }}>
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${Math.min((c.afiliados.length / META_AFILIADOS_POR_COORDINADOR) * 100, 100)}%`, background: '#166534' }}
+                  />
+                </div>
+              </button>
+
+              {asistenciaActiva && (
+                <div className="mt-3 flex items-center justify-between gap-2 px-1">
+                  <span className="text-xs font-medium" style={{ color: 'var(--texto-secundario)' }}>
+                    Asistencia del coordinador
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => asistenciaActiva.onToggle(c.id)}
+                    disabled={asistenciaActiva.guardandoId === c.id}
+                    className="flex-shrink-0 w-10 h-10 rounded-lg border-2 flex items-center justify-center font-bold text-base disabled:opacity-50 transition-colors"
+                    style={asistenciaActiva.presentes.has(c.id)
+                      ? { background: '#166534', borderColor: '#166534', color: 'white' }
+                      : { background: 'white', borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}
+                    title={asistenciaActiva.presentes.has(c.id) ? 'Presente — toca para desmarcar' : 'Marcar presente'}
+                  >
+                    {asistenciaActiva.guardandoId === c.id ? '…' : asistenciaActiva.presentes.has(c.id) ? '✓' : ''}
+                  </button>
+                </div>
+              )}
+
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => abrirCompromiso(c)}
+                  className="text-xs px-3 py-1.5 rounded-lg font-semibold border inline-flex items-center gap-1.5"
+                  style={c.compromisos && c.compromisos.trim()
+                    ? { background: '#fef3c7', color: '#b45309', borderColor: '#fde68a' }
+                    : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
+                  Compromisos
+                  {c.compromisos && c.compromisos.trim() && (
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#b45309' }}></span>
+                  )}
+                </button>
+
+                {compromisosAbierto === c.id && (
+                  <div className="mt-2 p-3 rounded-lg border space-y-2" style={{ borderColor: 'var(--color-borde)', background: '#f8fafc' }}>
+                    <textarea
+                      value={compromisoDraft}
+                      onChange={(e) => setCompromisoDraft(e.target.value)}
+                      rows={4}
+                      className="w-full text-sm rounded-lg border px-3 py-2"
+                      style={{ borderColor: 'var(--color-borde)' }}
+                      placeholder="Escribe los compromisos de este coordinador..."
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => guardarCompromiso(c.id)}
+                        disabled={guardandoCompromiso}
+                        className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50"
+                        style={{ background: '#166534' }}>
+                        {guardandoCompromiso ? 'Guardando...' : 'Guardar'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCompromisosAbierto(null)}
+                        className="text-xs px-3 py-1.5 rounded-lg border font-medium"
+                        style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                        Cerrar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {abierto && (
+                <div className="mt-4 pt-4 border-t space-y-1.5" style={{ borderColor: 'var(--color-borde)' }}>
+                  <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--texto-secundario)' }}>
+                    Afiliados asignados
+                  </p>
+                  {c.afiliados.length === 0 ? (
+                    <p className="text-sm italic" style={{ color: 'var(--texto-secundario)' }}>Sin afiliados asignados todavia.</p>
+                  ) : (
+                    c.afiliados.map((a) => (
+                      <AfiliadoDetalleCard
+                        key={a.id}
+                        nombre={a.nombre}
+                        telefono={a.telefono}
+                        sector={a.sector}
+                        vota_en_pinula={a.vota_en_pinula}
+                        es_fiscal={a.es_fiscal}
+                        rol={a.rol}
+                        ubicacion={a.ubicacion}
+                        asistencia={asistenciaActiva ? {
+                          presente: asistenciaActiva.presentes.has(a.id),
+                          guardando: asistenciaActiva.guardandoId === a.id,
+                          onToggle: () => asistenciaActiva.onToggle(a.id),
+                        } : undefined}
+                      />
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
   }
 
   // ── Resumen comparativo de TODOS los templarios ────────────
@@ -1763,30 +1904,6 @@ export default function EstadisticasPage() {
                   <option key={t.id} value={t.nombre}>{t.nombre}</option>
                 ))}
               </select>
-
-              <div className="pt-2 border-t space-y-2" style={{ borderColor: 'var(--color-borde)' }}>
-                <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--texto-secundario)' }}>
-                  Tomar asistencia
-                </p>
-                <select
-                  value={reunionAsistenciaId}
-                  onChange={(e) => seleccionarReunionAsistencia(e.target.value ? Number(e.target.value) : '')}
-                  className="w-full text-sm px-3 py-2 rounded-lg border"
-                  style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-principal)' }}
-                >
-                  <option value="">Selecciona una reunión para pasar lista</option>
-                  {reunionesAsistencia.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.titulo} — {formatFechaCorta(r.fecha)} {r.hora_inicio?.slice(0, 5)}
-                    </option>
-                  ))}
-                </select>
-                {reunionAsistenciaId && (
-                  <p className="text-xs" style={{ color: 'var(--texto-secundario)' }}>
-                    {loadingAsistencia ? 'Cargando asistencia...' : `${afiliadosPresentes.size} presente${afiliadosPresentes.size !== 1 ? 's' : ''} registrados en esta reunión`}
-                  </p>
-                )}
-              </div>
             </div>
 
             {loadingEstructura ? (
@@ -1814,150 +1931,7 @@ export default function EstadisticasPage() {
                   </div>
                 </div>
 
-                {coordinadoresDelTemplario.length === 0 ? (
-                  <div className="card text-center py-10">
-                    <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>Sin coordinadores</p>
-                    <p className="text-sm mt-1" style={{ color: 'var(--texto-secundario)' }}>
-                      Este templario todavia no tiene afiliados con rol Coordinador.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {coordinadoresDelTemplario.map((c) => {
-                      const abierto = expandidoCoordinador === c.id
-                      const cumpleMeta = c.afiliados.length >= META_AFILIADOS_POR_COORDINADOR
-                      return (
-                        <div key={c.id} className="card hover:shadow-md transition-shadow">
-                          <button className="w-full text-left" onClick={() => setExpandidoCoordinador(abierto ? null : c.id)}>
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 text-sm" style={{ background: '#166534' }}>
-                                  {c.nombre.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="font-semibold text-sm leading-snug" style={{ color: 'var(--texto-principal)' }}>{c.nombre}</p>
-                                  <p className="text-xs mt-0.5" style={{ color: cumpleMeta ? '#166534' : '#b45309' }}>
-                                    {cumpleMeta ? 'Cumple la meta' : `Faltan ${META_AFILIADOS_POR_COORDINADOR - c.afiliados.length} para la meta`}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                <div className="text-right">
-                                  <p className="font-bold text-lg leading-none" style={{ color: '#166534' }}>{c.afiliados.length}</p>
-                                  <p className="text-xs" style={{ color: 'var(--texto-secundario)' }}>/ {META_AFILIADOS_POR_COORDINADOR}</p>
-                                </div>
-                                <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform ${abierto ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'var(--texto-secundario)' }}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                              </div>
-                            </div>
-
-                            <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background: '#dcfce7' }}>
-                              <div
-                                className="h-full rounded-full transition-all"
-                                style={{ width: `${Math.min((c.afiliados.length / META_AFILIADOS_POR_COORDINADOR) * 100, 100)}%`, background: '#166534' }}
-                              />
-                            </div>
-                          </button>
-
-                          {reunionAsistenciaId && (
-                            <div className="mt-3 flex items-center justify-between gap-2 px-1">
-                              <span className="text-xs font-medium" style={{ color: 'var(--texto-secundario)' }}>
-                                Asistencia del coordinador
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => toggleAsistencia(c.id)}
-                                disabled={guardandoAsistenciaId === c.id}
-                                className="flex-shrink-0 w-10 h-10 rounded-lg border-2 flex items-center justify-center font-bold text-base disabled:opacity-50 transition-colors"
-                                style={afiliadosPresentes.has(c.id)
-                                  ? { background: '#166534', borderColor: '#166534', color: 'white' }
-                                  : { background: 'white', borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}
-                                title={afiliadosPresentes.has(c.id) ? 'Presente — toca para desmarcar' : 'Marcar presente'}
-                              >
-                                {guardandoAsistenciaId === c.id ? '…' : afiliadosPresentes.has(c.id) ? '✓' : ''}
-                              </button>
-                            </div>
-                          )}
-
-                          <div className="mt-3">
-                            <button
-                              type="button"
-                              onClick={() => abrirCompromiso(c)}
-                              className="text-xs px-3 py-1.5 rounded-lg font-semibold border inline-flex items-center gap-1.5"
-                              style={c.compromisos && c.compromisos.trim()
-                                ? { background: '#fef3c7', color: '#b45309', borderColor: '#fde68a' }
-                                : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
-                              Compromisos
-                              {c.compromisos && c.compromisos.trim() && (
-                                <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#b45309' }}></span>
-                              )}
-                            </button>
-
-                            {compromisosAbierto === c.id && (
-                              <div className="mt-2 p-3 rounded-lg border space-y-2" style={{ borderColor: 'var(--color-borde)', background: '#f8fafc' }}>
-                                <textarea
-                                  value={compromisoDraft}
-                                  onChange={(e) => setCompromisoDraft(e.target.value)}
-                                  rows={4}
-                                  className="w-full text-sm rounded-lg border px-3 py-2"
-                                  style={{ borderColor: 'var(--color-borde)' }}
-                                  placeholder="Escribe los compromisos de este coordinador..."
-                                />
-                                <div className="flex gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => guardarCompromiso(c.id)}
-                                    disabled={guardandoCompromiso}
-                                    className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50"
-                                    style={{ background: '#166534' }}>
-                                    {guardandoCompromiso ? 'Guardando...' : 'Guardar'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setCompromisosAbierto(null)}
-                                    className="text-xs px-3 py-1.5 rounded-lg border font-medium"
-                                    style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
-                                    Cerrar
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          {abierto && (
-                            <div className="mt-4 pt-4 border-t space-y-1.5" style={{ borderColor: 'var(--color-borde)' }}>
-                              <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--texto-secundario)' }}>
-                                Afiliados asignados
-                              </p>
-                              {c.afiliados.length === 0 ? (
-                                <p className="text-sm italic" style={{ color: 'var(--texto-secundario)' }}>Sin afiliados asignados todavia.</p>
-                              ) : (
-                                c.afiliados.map((a) => (
-                                  <AfiliadoDetalleCard
-                                    key={a.id}
-                                    nombre={a.nombre}
-                                    telefono={a.telefono}
-                                    sector={a.sector}
-                                    vota_en_pinula={a.vota_en_pinula}
-                                    es_fiscal={a.es_fiscal}
-                                    rol={a.rol}
-                                    ubicacion={a.ubicacion}
-                                    asistencia={reunionAsistenciaId ? {
-                                      presente: afiliadosPresentes.has(a.id),
-                                      guardando: guardandoAsistenciaId === a.id,
-                                      onToggle: () => toggleAsistencia(a.id),
-                                    } : undefined}
-                                  />
-                                ))
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
+                {renderArbolCoordinadores()}
               </>
             )}
 
@@ -2053,6 +2027,15 @@ export default function EstadisticasPage() {
                 </p>
               </div>
 
+              <input
+                type="text"
+                value={busquedaAfiliadosAsistencia}
+                onChange={(e) => { setBusquedaAfiliadosAsistencia(e.target.value); setPaginaAfiliadosAsistencia(1) }}
+                placeholder="Buscar por nombre o DPI..."
+                className="w-full text-sm px-3 py-2 rounded-lg border"
+                style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-principal)' }}
+              />
+
               <select
                 value={templarioSeleccionado}
                 onChange={(e) => setTemplarioSeleccionado(e.target.value)}
@@ -2125,11 +2108,94 @@ export default function EstadisticasPage() {
               </div>
             </div>
 
-            {!templarioSeleccionado ? (
+            {mostrarListaPlanaAsistencia ? (
+              <>
+                {busquedaAfiliadosAsistencia.trim() && reunionActivaParaMarcar && (
+                  <div className="card" style={{ background: '#e0f7fa' }}>
+                    <p className="text-sm font-semibold" style={{ color: '#004466' }}>
+                      Marcando asistencia para: {reunionesReporteOrdenadas[0]?.titulo} — {formatFechaCorta(reunionesReporteOrdenadas[0]?.fecha || '')}
+                    </p>
+                  </div>
+                )}
+
+                {loadingEstructura ? (
+                  <div className="card text-center py-10">
+                    <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto" style={{ borderColor: '#004466' }}></div>
+                  </div>
+                ) : afiliadosAsistenciaFiltrados.length === 0 ? (
+                  <div className="card text-center py-10">
+                    <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>Sin resultados</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-1.5">
+                      {afiliadosAsistenciaPagina.map((a) => (
+                        <AfiliadoDetalleCard
+                          key={a.id}
+                          nombre={nombreCompletoAfiliado(a)}
+                          telefono={a.telefono}
+                          sector={a.sectores?.nombre || 'Sin sector'}
+                          vota_en_pinula={a.vota_en_pinula}
+                          es_fiscal={a.es_fiscal}
+                          rol={a.rol_afiliado || 'Simpatizante'}
+                          ubicacion={a.nombre_ubicacion || undefined}
+                          asistencia={reunionActivaParaMarcar ? {
+                            presente: (asistenciasReporte[reunionActivaParaMarcar] || new Set()).has(a.id),
+                            guardando: guardandoAsistenciaId === a.id,
+                            onToggle: () => toggleAsistencia(a.id),
+                          } : undefined}
+                        />
+                      ))}
+                    </div>
+
+                    {totalPaginasAfiliadosAsistencia > 1 && (
+                      <div className="card flex items-center justify-between gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setPaginaAfiliadosAsistencia((p) => Math.max(1, p - 1))}
+                          disabled={paginaAfiliadosAsistencia === 1}
+                          className="text-xs px-3 py-1.5 rounded-lg border font-medium disabled:opacity-40"
+                          style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                          Anterior
+                        </button>
+                        <span className="text-xs" style={{ color: 'var(--texto-secundario)' }}>
+                          Página {paginaAfiliadosAsistencia} de {totalPaginasAfiliadosAsistencia} ({afiliadosAsistenciaFiltrados.length} afiliados)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setPaginaAfiliadosAsistencia((p) => Math.min(totalPaginasAfiliadosAsistencia, p + 1))}
+                          disabled={paginaAfiliadosAsistencia === totalPaginasAfiliadosAsistencia}
+                          className="text-xs px-3 py-1.5 rounded-lg border font-medium disabled:opacity-40"
+                          style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                          Siguiente
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            ) : loadingEstructura ? (
               <div className="card text-center py-10">
-                <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>Selecciona un templario</p>
-                <p className="text-sm mt-1" style={{ color: 'var(--texto-secundario)' }}>Para ver la tabla de asistencia de su estructura.</p>
+                <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto" style={{ borderColor: '#004466' }}></div>
               </div>
+            ) : reunionesReporteOrdenadas.length <= 1 ? (
+              <>
+                {reunionActivaParaMarcar && (
+                  <div className="card" style={{ background: '#e0f7fa' }}>
+                    <p className="text-sm font-semibold" style={{ color: '#004466' }}>
+                      Marcando asistencia para: {reunionesReporteOrdenadas[0]?.titulo} — {formatFechaCorta(reunionesReporteOrdenadas[0]?.fecha || '')}
+                    </p>
+                    {cargandoReunionReporte === reunionActivaParaMarcar && (
+                      <p className="text-xs mt-1" style={{ color: '#004466' }}>Cargando asistencia...</p>
+                    )}
+                  </div>
+                )}
+                {renderArbolCoordinadores(reunionActivaParaMarcar ? {
+                  presentes: asistenciasReporte[reunionActivaParaMarcar] || new Set(),
+                  guardandoId: guardandoAsistenciaId,
+                  onToggle: toggleAsistencia,
+                } : undefined)}
+              </>
             ) : filasReporteAsistencia.length === 0 ? (
               <div className="card text-center py-10">
                 <p className="font-medium" style={{ color: 'var(--texto-principal)' }}>Sin coordinadores</p>
