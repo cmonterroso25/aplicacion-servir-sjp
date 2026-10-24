@@ -656,6 +656,21 @@ export default function EstadisticasPage() {
 
   const totalAfiliadosEstructura = coordinadoresDelTemplario.reduce((s, c) => s + c.afiliados.length, 0)
 
+  // Total de asistentes (coordinadores + afiliados) del templario seleccionado,
+  // para la reunión activa de marcado en la pestaña Asistencia.
+  const totalAsistentesTemplario = useMemo(() => {
+    const reunionId = reunionesReporteSeleccionadas.size === 1 ? Array.from(reunionesReporteSeleccionadas)[0] : null
+    if (!reunionId) return 0
+    const presentes = asistenciasReporte[reunionId]
+    if (!presentes) return 0
+    let total = 0
+    coordinadoresDelTemplario.forEach((c) => {
+      if (presentes.has(c.id)) total++
+      c.afiliados.forEach((a) => { if (presentes.has(a.id)) total++ })
+    })
+    return total
+  }, [coordinadoresDelTemplario, asistenciasReporte, reunionesReporteSeleccionadas])
+
   type FilaReporteAsistencia = { id: number; nombre: string; rol: string; coordinador: string | null }
 
   const filasReporteAsistencia = useMemo<FilaReporteAsistencia[]>(() => {
@@ -739,11 +754,17 @@ export default function EstadisticasPage() {
   // Árbol Coordinador → Afiliados del templario seleccionado. Se reutiliza en
   // Estructura (sin asistencia) y en Asistencia (con checkbox de presente/ausente
   // cuando hay exactamente una reunión activa).
-  const renderArbolCoordinadores = (asistenciaActiva?: {
-    presentes: Set<number>
-    guardandoId: number | null
-    onToggle: (afiliadoId: number) => void
+  const renderArbolCoordinadores = (opciones?: {
+    ocultarMeta?: boolean
+    asistencia?: {
+      presentes: Set<number>
+      guardandoId: number | null
+      onToggle: (afiliadoId: number) => void
+    }
   }) => {
+    const asistenciaActiva = opciones?.asistencia
+    const ocultarMeta = !!opciones?.ocultarMeta
+
     if (coordinadoresDelTemplario.length === 0) {
       return (
         <div className="card text-center py-10">
@@ -759,6 +780,9 @@ export default function EstadisticasPage() {
         {coordinadoresDelTemplario.map((c) => {
           const abierto = expandidoCoordinador === c.id
           const cumpleMeta = c.afiliados.length >= META_AFILIADOS_POR_COORDINADOR
+          const asistentesCoordinador = asistenciaActiva
+            ? (asistenciaActiva.presentes.has(c.id) ? 1 : 0) + c.afiliados.filter((a) => asistenciaActiva.presentes.has(a.id)).length
+            : 0
           return (
             <div key={c.id} className="card hover:shadow-md transition-shadow">
               <button className="w-full text-left" onClick={() => setExpandidoCoordinador(abierto ? null : c.id)}>
@@ -769,15 +793,31 @@ export default function EstadisticasPage() {
                     </div>
                     <div className="min-w-0">
                       <p className="font-semibold text-sm leading-snug" style={{ color: 'var(--texto-principal)' }}>{c.nombre}</p>
-                      <p className="text-xs mt-0.5" style={{ color: cumpleMeta ? '#166534' : '#b45309' }}>
-                        {cumpleMeta ? 'Cumple la meta' : `Faltan ${META_AFILIADOS_POR_COORDINADOR - c.afiliados.length} para la meta`}
-                      </p>
+                      {!ocultarMeta && (
+                        <p className="text-xs mt-0.5" style={{ color: cumpleMeta ? '#166534' : '#b45309' }}>
+                          {cumpleMeta ? 'Cumple la meta' : `Faltan ${META_AFILIADOS_POR_COORDINADOR - c.afiliados.length} para la meta`}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <div className="text-right">
-                      <p className="font-bold text-lg leading-none" style={{ color: '#166534' }}>{c.afiliados.length}</p>
-                      <p className="text-xs" style={{ color: 'var(--texto-secundario)' }}>/ {META_AFILIADOS_POR_COORDINADOR}</p>
+                      {asistenciaActiva ? (
+                        <>
+                          <p className="font-bold text-lg leading-none" style={{ color: '#166534' }}>{asistentesCoordinador}</p>
+                          <p className="text-xs" style={{ color: 'var(--texto-secundario)' }}>asistentes</p>
+                        </>
+                      ) : ocultarMeta ? (
+                        <>
+                          <p className="font-bold text-lg leading-none" style={{ color: '#166534' }}>{c.afiliados.length}</p>
+                          <p className="text-xs" style={{ color: 'var(--texto-secundario)' }}>afiliados</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-bold text-lg leading-none" style={{ color: '#166534' }}>{c.afiliados.length}</p>
+                          <p className="text-xs" style={{ color: 'var(--texto-secundario)' }}>/ {META_AFILIADOS_POR_COORDINADOR}</p>
+                        </>
+                      )}
                     </div>
                     <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform ${abierto ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'var(--texto-secundario)' }}>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -785,12 +825,14 @@ export default function EstadisticasPage() {
                   </div>
                 </div>
 
-                <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background: '#dcfce7' }}>
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{ width: `${Math.min((c.afiliados.length / META_AFILIADOS_POR_COORDINADOR) * 100, 100)}%`, background: '#166534' }}
-                  />
-                </div>
+                {!ocultarMeta && (
+                  <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background: '#dcfce7' }}>
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${Math.min((c.afiliados.length / META_AFILIADOS_POR_COORDINADOR) * 100, 100)}%`, background: '#166534' }}
+                    />
+                  </div>
+                )}
               </button>
 
               {asistenciaActiva && (
@@ -813,50 +855,52 @@ export default function EstadisticasPage() {
                 </div>
               )}
 
-              <div className="mt-3">
-                <button
-                  type="button"
-                  onClick={() => abrirCompromiso(c)}
-                  className="text-xs px-3 py-1.5 rounded-lg font-semibold border inline-flex items-center gap-1.5"
-                  style={c.compromisos && c.compromisos.trim()
-                    ? { background: '#fef3c7', color: '#b45309', borderColor: '#fde68a' }
-                    : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
-                  Compromisos
-                  {c.compromisos && c.compromisos.trim() && (
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#b45309' }}></span>
-                  )}
-                </button>
+              {!ocultarMeta && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => abrirCompromiso(c)}
+                    className="text-xs px-3 py-1.5 rounded-lg font-semibold border inline-flex items-center gap-1.5"
+                    style={c.compromisos && c.compromisos.trim()
+                      ? { background: '#fef3c7', color: '#b45309', borderColor: '#fde68a' }
+                      : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
+                    Compromisos
+                    {c.compromisos && c.compromisos.trim() && (
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#b45309' }}></span>
+                    )}
+                  </button>
 
-                {compromisosAbierto === c.id && (
-                  <div className="mt-2 p-3 rounded-lg border space-y-2" style={{ borderColor: 'var(--color-borde)', background: '#f8fafc' }}>
-                    <textarea
-                      value={compromisoDraft}
-                      onChange={(e) => setCompromisoDraft(e.target.value)}
-                      rows={4}
-                      className="w-full text-sm rounded-lg border px-3 py-2"
-                      style={{ borderColor: 'var(--color-borde)' }}
-                      placeholder="Escribe los compromisos de este coordinador..."
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => guardarCompromiso(c.id)}
-                        disabled={guardandoCompromiso}
-                        className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50"
-                        style={{ background: '#166534' }}>
-                        {guardandoCompromiso ? 'Guardando...' : 'Guardar'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCompromisosAbierto(null)}
-                        className="text-xs px-3 py-1.5 rounded-lg border font-medium"
-                        style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
-                        Cerrar
-                      </button>
+                  {compromisosAbierto === c.id && (
+                    <div className="mt-2 p-3 rounded-lg border space-y-2" style={{ borderColor: 'var(--color-borde)', background: '#f8fafc' }}>
+                      <textarea
+                        value={compromisoDraft}
+                        onChange={(e) => setCompromisoDraft(e.target.value)}
+                        rows={4}
+                        className="w-full text-sm rounded-lg border px-3 py-2"
+                        style={{ borderColor: 'var(--color-borde)' }}
+                        placeholder="Escribe los compromisos de este coordinador..."
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => guardarCompromiso(c.id)}
+                          disabled={guardandoCompromiso}
+                          className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50"
+                          style={{ background: '#166534' }}>
+                          {guardandoCompromiso ? 'Guardando...' : 'Guardar'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCompromisosAbierto(null)}
+                          className="text-xs px-3 py-1.5 rounded-lg border font-medium"
+                          style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-secundario)' }}>
+                          Cerrar
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
               {abierto && (
                 <div className="mt-4 pt-4 border-t space-y-1.5" style={{ borderColor: 'var(--color-borde)' }}>
@@ -2027,15 +2071,6 @@ export default function EstadisticasPage() {
                 </p>
               </div>
 
-              <input
-                type="text"
-                value={busquedaAfiliadosAsistencia}
-                onChange={(e) => { setBusquedaAfiliadosAsistencia(e.target.value); setPaginaAfiliadosAsistencia(1) }}
-                placeholder="Buscar por nombre o DPI..."
-                className="w-full text-sm px-3 py-2 rounded-lg border"
-                style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-principal)' }}
-              />
-
               <select
                 value={templarioSeleccionado}
                 onChange={(e) => setTemplarioSeleccionado(e.target.value)}
@@ -2105,6 +2140,17 @@ export default function EstadisticasPage() {
                     })}
                   </div>
                 )}
+              </div>
+
+              <div className="pt-2 border-t" style={{ borderColor: 'var(--color-borde)' }}>
+                <input
+                  type="text"
+                  value={busquedaAfiliadosAsistencia}
+                  onChange={(e) => { setBusquedaAfiliadosAsistencia(e.target.value); setPaginaAfiliadosAsistencia(1) }}
+                  placeholder="Buscar por nombre o DPI..."
+                  className="w-full text-sm px-3 py-2 rounded-lg border"
+                  style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-principal)' }}
+                />
               </div>
             </div>
 
@@ -2182,19 +2228,28 @@ export default function EstadisticasPage() {
               <>
                 {reunionActivaParaMarcar && (
                   <div className="card" style={{ background: '#e0f7fa' }}>
-                    <p className="text-sm font-semibold" style={{ color: '#004466' }}>
-                      Marcando asistencia para: {reunionesReporteOrdenadas[0]?.titulo} — {formatFechaCorta(reunionesReporteOrdenadas[0]?.fecha || '')}
-                    </p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold" style={{ color: '#004466' }}>
+                        Marcando asistencia para: {reunionesReporteOrdenadas[0]?.titulo} — {formatFechaCorta(reunionesReporteOrdenadas[0]?.fecha || '')}
+                      </p>
+                      <p className="text-right flex-shrink-0">
+                        <span className="font-bold text-lg leading-none block" style={{ color: '#166534' }}>{totalAsistentesTemplario}</span>
+                        <span className="text-xs" style={{ color: '#004466' }}>asistentes del templario</span>
+                      </p>
+                    </div>
                     {cargandoReunionReporte === reunionActivaParaMarcar && (
                       <p className="text-xs mt-1" style={{ color: '#004466' }}>Cargando asistencia...</p>
                     )}
                   </div>
                 )}
-                {renderArbolCoordinadores(reunionActivaParaMarcar ? {
-                  presentes: asistenciasReporte[reunionActivaParaMarcar] || new Set(),
-                  guardandoId: guardandoAsistenciaId,
-                  onToggle: toggleAsistencia,
-                } : undefined)}
+                {renderArbolCoordinadores({
+                  ocultarMeta: true,
+                  asistencia: reunionActivaParaMarcar ? {
+                    presentes: asistenciasReporte[reunionActivaParaMarcar] || new Set(),
+                    guardandoId: guardandoAsistenciaId,
+                    onToggle: toggleAsistencia,
+                  } : undefined,
+                })}
               </>
             ) : filasReporteAsistencia.length === 0 ? (
               <div className="card text-center py-10">
