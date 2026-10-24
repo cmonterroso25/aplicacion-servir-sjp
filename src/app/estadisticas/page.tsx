@@ -336,6 +336,7 @@ export default function EstadisticasPage() {
   const [guardandoAsistenciaId, setGuardandoAsistenciaId] = useState<number | null>(null)
   const [filtroMesActividades, setFiltroMesActividades] = useState<number | ''>(new Date().getMonth() + 1)
   const [filtroAnioActividades, setFiltroAnioActividades] = useState<number | ''>(new Date().getFullYear())
+  const [actividadesDesplegado, setActividadesDesplegado] = useState(false)
   const [busquedaAfiliadosAsistencia, setBusquedaAfiliadosAsistencia] = useState('')
   const [paginaAfiliadosAsistencia, setPaginaAfiliadosAsistencia] = useState(1)
 
@@ -2120,24 +2121,44 @@ export default function EstadisticasPage() {
                 ) : reunionesReporteFiltradas.length === 0 ? (
                   <p className="text-sm italic" style={{ color: 'var(--texto-secundario)' }}>No hay reuniones registradas para ese mes/año.</p>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {reunionesReporteFiltradas.map((r) => {
-                      const seleccionada = reunionesReporteSeleccionadas.has(r.id)
-                      return (
-                        <button
-                          key={r.id}
-                          type="button"
-                          onClick={() => toggleReunionReporte(r.id)}
-                          disabled={cargandoReunionReporte === r.id}
-                          className="text-xs px-3 py-1.5 rounded-lg border font-medium transition-all disabled:opacity-50"
-                          style={seleccionada
-                            ? { background: '#004466', color: 'white', borderColor: '#004466' }
-                            : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
-                          {seleccionada ? '✓ ' : ''}{r.titulo} — {formatFechaCorta(r.fecha)}
-                          {cargandoReunionReporte === r.id ? '…' : ''}
-                        </button>
-                      )
-                    })}
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setActividadesDesplegado((v) => !v)}
+                      className="w-full flex items-center justify-between gap-2 text-sm px-3 py-2 rounded-lg border font-medium"
+                      style={{ borderColor: 'var(--color-borde)', color: 'var(--texto-principal)' }}
+                    >
+                      <span>
+                        {reunionesReporteSeleccionadas.size === 0
+                          ? `${reunionesReporteFiltradas.length} actividad${reunionesReporteFiltradas.length !== 1 ? 'es' : ''} disponible${reunionesReporteFiltradas.length !== 1 ? 's' : ''}`
+                          : `${reunionesReporteSeleccionadas.size} actividad${reunionesReporteSeleccionadas.size !== 1 ? 'es' : ''} seleccionada${reunionesReporteSeleccionadas.size !== 1 ? 's' : ''}`}
+                      </span>
+                      <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform flex-shrink-0 ${actividadesDesplegado ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'var(--texto-secundario)' }}>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {actividadesDesplegado && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {reunionesReporteFiltradas.map((r) => {
+                          const seleccionada = reunionesReporteSeleccionadas.has(r.id)
+                          return (
+                            <button
+                              key={r.id}
+                              type="button"
+                              onClick={() => toggleReunionReporte(r.id)}
+                              disabled={cargandoReunionReporte === r.id}
+                              className="text-xs px-3 py-1.5 rounded-lg border font-medium transition-all disabled:opacity-50"
+                              style={seleccionada
+                                ? { background: '#004466', color: 'white', borderColor: '#004466' }
+                                : { background: 'white', color: 'var(--texto-secundario)', borderColor: 'var(--color-borde)' }}>
+                              {seleccionada ? '✓ ' : ''}{r.titulo} — {formatFechaCorta(r.fecha)}
+                              {cargandoReunionReporte === r.id ? '…' : ''}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
